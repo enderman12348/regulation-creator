@@ -5,637 +5,506 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理者パネル – 模擬戦レギュレーション</title>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, writeBatch, serverTimestamp, getDoc }
-    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import{getAuth,signInWithPopup,GoogleAuthProvider,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import{getFirestore,collection,getDocs,doc,setDoc,deleteDoc,writeBatch,serverTimestamp,getDoc}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  const cfg={apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"};
+  const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),prov=new GoogleAuthProvider();
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",
-    authDomain: "regulation-creation-tool.firebaseapp.com",
-    projectId: "regulation-creation-tool",
-    storageBucket: "regulation-creation-tool.firebasestorage.app",
-    messagingSenderId: "743315732081",
-    appId: "1:743315732081:web:a2e78a376b403b15e80dd0"
-  };
+  window.loginWithGoogle=async()=>{try{await signInWithPopup(auth,prov);}catch(e){if(e.code!=='auth/popup-closed-by-user')toast('ログインに失敗しました: '+e.message,'err');}};
+  window.logout=async()=>{await signOut(auth);};
 
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-  const provider = new GoogleAuthProvider();
-
-  window.loginWithGoogle = async () => {
-    try { await signInWithPopup(auth, provider); }
-    catch(e) { if (e.code!=='auth/popup-closed-by-user') showNotice('ログインに失敗しました: '+e.message,'error'); }
-  };
-  window.logout = async () => { await signOut(auth); };
-
-  onAuthStateChanged(auth, async user => {
-    if (!user) { showScreen('login'); return; }
-    showScreen('loading');
-    try {
-      const adminDoc = await getDoc(doc(db,'admins',user.email));
-      const isAdmin = adminDoc.exists() && adminDoc.data().role==='admin';
-      if (isAdmin) {
-        document.getElementById('user-name').textContent = user.displayName||user.email;
-        document.getElementById('user-avatar').src = user.photoURL||'';
-        showScreen('admin');
-        showNotice(`${user.displayName||user.email} としてログインしました`,'success');
+  onAuthStateChanged(auth,async user=>{
+    if(!user){show('login');return;}
+    show('loading');
+    try{
+      const d=await getDoc(doc(db,'admins',user.email));
+      const ok=d.exists()&&d.data().role==='admin';
+      if(ok){
+        document.getElementById('u-name').textContent=user.displayName||user.email;
+        document.getElementById('u-av').src=user.photoURL||'';
+        show('admin');toast(`${user.displayName||user.email} としてログインしました`,'ok');
         loadAll();
-      } else {
-        await signOut(auth);
-        showScreen('login');
-        showNotice('このアカウントには管理者権限がありません。','error');
-      }
-    } catch(e) {
-      await signOut(auth); showScreen('login');
-      showNotice('権限の確認に失敗しました: '+e.message,'error');
-    }
+      }else{await signOut(auth);show('login');toast('管理者権限がありません。','err');}
+    }catch(e){await signOut(auth);show('login');toast('確認に失敗: '+e.message,'err');}
   });
 
-  function showScreen(name) {
-    document.getElementById('login-screen').style.display  = name==='login'  ?'flex':'none';
-    document.getElementById('loading-screen').style.display= name==='loading'?'flex':'none';
-    document.getElementById('admin-screen').style.display  = name==='admin'  ?'block':'none';
+  function show(s){document.getElementById('login-screen').style.display=s==='login'?'flex':'none';document.getElementById('loading-screen').style.display=s==='loading'?'flex':'none';document.getElementById('admin-screen').style.display=s==='admin'?'block':'none';}
+
+  async function loadAll(){
+    try{
+      const[cs,ps]=await Promise.all([getDocs(collection(db,'clauses')),getDocs(collection(db,'presets'))]);
+      window._cl=[];cs.forEach(d=>window._cl.push({id:d.id,...d.data()}));window._cl.sort((a,b)=>(a.order??0)-(b.order??0));
+      window._pr=[];ps.forEach(d=>window._pr.push({id:d.id,...d.data()}));
+      renderClauses();renderPresets();
+    }catch(e){toast('読み込みエラー: '+e.message,'err');}
   }
 
-  async function loadAll() {
-    try {
-      const [cSnap,pSnap] = await Promise.all([getDocs(collection(db,'clauses')),getDocs(collection(db,'presets'))]);
-      window._clauses=[];
-      cSnap.forEach(d=>window._clauses.push({id:d.id,...d.data()}));
-      window._clauses.sort((a,b)=>(a.order??0)-(b.order??0));
-      window._presets=[];
-      pSnap.forEach(d=>window._presets.push({id:d.id,...d.data()}));
-      renderClauses(); renderPresets();
-    } catch(e) { showNotice('読み込みエラー: '+e.message,'error'); }
-  }
-
-  window.saveClause = async (data) => {
-    try {
-      await setDoc(doc(db,'clauses',data.id),{...data,updatedAt:serverTimestamp()});
-      showNotice('条文を保存しました'); await loadAll(); return true;
-    } catch(e) { showNotice('保存エラー: '+e.message,'error'); return false; }
-  };
-  window.deleteClause = async (id) => {
-    if (!confirm('この条文を削除しますか？')) return;
-    try { await deleteDoc(doc(db,'clauses',id)); showNotice('削除しました'); loadAll(); }
-    catch(e) { showNotice('削除エラー: '+e.message,'error'); }
-  };
-  window.saveOrder = async (ids) => {
-    try {
-      const batch = writeBatch(db);
-      ids.forEach((id,i) => batch.update(doc(db,'clauses',id),{order:i}));
-      await batch.commit(); showNotice('順序を保存しました');
-    } catch(e) { showNotice('保存エラー: '+e.message,'error'); }
-  };
-  window.savePreset = async (data) => {
-    try {
-      await setDoc(doc(db,'presets',data.id),{...data,updatedAt:serverTimestamp()});
-      showNotice('プリセットを保存しました'); loadAll();
-    } catch(e) { showNotice('保存エラー: '+e.message,'error'); }
-  };
-  window.deletePreset = async (id) => {
-    if (!confirm('このプリセットを削除しますか？')) return;
-    try { await deleteDoc(doc(db,'presets',id)); showNotice('削除しました'); loadAll(); }
-    catch(e) { showNotice('削除エラー: '+e.message,'error'); }
-  };
-  window._loadAll = loadAll;
+  window.saveClause=async d=>{try{await setDoc(doc(db,'clauses',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');await loadAll();return true;}catch(e){toast('保存エラー: '+e.message,'err');return false;}};
+  window.deleteClause=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'clauses',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window.saveOrder=async ids=>{try{const b=writeBatch(db);ids.forEach((id,i)=>b.update(doc(db,'clauses',id),{order:i}));await b.commit();toast('順序を保存しました');}catch(e){toast('順序保存エラー','err');}};
+  window.savePreset=async d=>{try{await setDoc(doc(db,'presets',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');loadAll();}catch(e){toast('保存エラー','err');}};
+  window.deletePreset=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'presets',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window._loadAll=loadAll;
 </script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
-
-:root {
-  --bg:#ffffff; --surface:#f7f7f5; --surface2:#efeeea; --border:#e3e2df;
-  --border-strong:#cfceca; --text:#1a1a1a; --text-2:#6b6b6b; --text-3:#9b9a97;
-  --accent:#2f80ed; --accent-bg:#e8f1fd;
-  --danger:#eb5757; --danger-bg:#fdeaea;
-  --green:#0f9960; --green-bg:#e4f5ef;
-  --amber:#c17d10; --amber-bg:#fdf3dc;
-  --radius:6px; --shadow:0 1px 3px rgba(0,0,0,.08); --shadow-lg:0 4px 20px rgba(0,0,0,.14);
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;600&display=swap');
+:root{
+  --bg:#fff;--sf:#f9f9f8;--sf2:#f1f0ef;--bd:#e8e7e5;--bd2:#d3d2cf;
+  --tx:#191919;--tx2:#6f6f6f;--tx3:#aaa9a6;
+  --blue:#2383e2;--blue-bg:#edf4fd;
+  --red:#e03e3e;--red-bg:#fdeaea;
+  --gr:#0d7a5f;--gr-bg:#e8f5f0;
+  --r:5px;--sh:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.05);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
+body{background:var(--bg);color:var(--tx);font-family:'Noto Sans JP','Inter',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
 
-/* ── Screens ── */
-#login-screen,#loading-screen{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;}
-.login-card{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:40px 48px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:var(--shadow-lg);max-width:360px;width:90%;}
-.login-card h2{font-size:18px;font-weight:700;color:var(--text);}
-.login-card p{font-size:13px;color:var(--text-3);line-height:1.7;}
-.google-btn{background:#fff;color:#3c4043;border:1px solid var(--border-strong);padding:10px 20px;border-radius:var(--radius);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:10px;font-weight:500;transition:.15s;font-family:'Noto Sans JP',sans-serif;}
-.google-btn:hover{background:var(--surface);border-color:var(--border-strong);}
-.google-btn img{width:18px;height:18px;}
-.spin{width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+/* screens */
+#login-screen,#loading-screen{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+.login-card{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:40px 48px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:0 4px 24px rgba(0,0,0,.1);max-width:340px;width:90%;}
+.login-card h2{font-size:17px;font-weight:700;}
+.login-card p{font-size:13px;color:var(--tx3);line-height:1.7;}
+.g-btn{background:#fff;color:#3c4043;border:1px solid var(--bd2);padding:9px 18px;border-radius:var(--r);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:9px;font-weight:500;transition:.12s;font-family:'Noto Sans JP',sans-serif;}
+.g-btn:hover{background:var(--sf2);}
+.g-btn img{width:16px;height:16px;}
+.spin{width:18px;height:18px;border:2px solid var(--bd);border-top-color:var(--tx2);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Notice ── */
-#notice{position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-12px);z-index:500;padding:10px 20px;border-radius:var(--radius);font-size:13px;font-weight:500;white-space:nowrap;box-shadow:var(--shadow-lg);opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;border:1px solid;}
-#notice.show{opacity:1;transform:translateX(-50%) translateY(0);}
-#notice.success{background:var(--green-bg);color:var(--green);border-color:#b3ddc8;}
-#notice.error{background:var(--danger-bg);color:var(--danger);border-color:#f5b8b8;}
+/* toast */
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:600;padding:9px 18px;border-radius:var(--r);font-size:13px;font-weight:500;white-space:nowrap;box-shadow:var(--sh);opacity:0;transition:opacity .22s,transform .22s;pointer-events:none;border:1px solid;}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#toast.ok{background:var(--gr-bg);color:var(--gr);border-color:#b3ddc8;}
+#toast.err{background:var(--red-bg);color:var(--red);border-color:#f5b8b8;}
 
-/* ── Topbar ── */
-.topbar{border-bottom:1px solid var(--border);height:48px;display:flex;align-items:center;padding:0 20px;gap:10px;background:var(--bg);position:sticky;top:0;z-index:50;}
-.topbar-logo{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--text);}
-.topbar-sep{color:var(--border-strong);margin:0 2px;}
-.admin-badge{font-size:10px;font-weight:600;background:var(--danger-bg);color:var(--danger);padding:2px 7px;border-radius:3px;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;}
-.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
-.user-info{display:flex;align-items:center;gap:8px;}
-#user-avatar{width:26px;height:26px;border-radius:50%;border:1px solid var(--border);}
-#user-name{font-size:12px;color:var(--text-2);}
-.topbar-link{font-size:12px;color:var(--text-2);text-decoration:none;padding:4px 10px;border-radius:var(--radius);transition:background .12s;}
-.topbar-link:hover{background:var(--surface);}
-.logout-btn{font-size:12px;color:var(--text-3);background:none;border:none;cursor:pointer;padding:4px 10px;border-radius:var(--radius);font-family:'Noto Sans JP',sans-serif;transition:background .12s,color .12s;}
-.logout-btn:hover{background:var(--danger-bg);color:var(--danger);}
+/* topbar */
+.topbar{border-bottom:1px solid var(--bd);height:44px;display:flex;align-items:center;padding:0 18px;gap:8px;background:var(--bg);position:sticky;top:0;z-index:50;}
+.t-logo{font-size:13px;font-weight:600;}
+.t-sep{color:var(--bd2);font-size:12px;}
+.badge{font-size:10px;font-weight:700;background:var(--red-bg);color:var(--red);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;letter-spacing:.04em;}
+.t-right{margin-left:auto;display:flex;align-items:center;gap:6px;}
+.u-info{display:flex;align-items:center;gap:7px;}
+#u-av{width:24px;height:24px;border-radius:50%;border:1px solid var(--bd);}
+#u-name{font-size:12px;color:var(--tx2);}
+.t-link{font-size:12px;color:var(--tx2);text-decoration:none;padding:3px 9px;border-radius:var(--r);transition:background .1s;}
+.t-link:hover{background:var(--sf2);}
+.t-logout{font-size:12px;color:var(--tx3);background:none;border:none;cursor:pointer;padding:3px 9px;border-radius:var(--r);font-family:'Noto Sans JP',sans-serif;transition:background .1s,color .1s;}
+.t-logout:hover{background:var(--red-bg);color:var(--red);}
 
-/* ── Layout ── */
-.admin-wrap{max-width:860px;margin:0 auto;padding:28px 32px;}
+/* wrap */
+.wrap{max-width:820px;margin:0 auto;padding:28px 28px;}
 
-/* ── Tabs ── */
-.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:24px;}
-.tab-btn{background:none;border:none;border-bottom:2px solid transparent;color:var(--text-3);padding:9px 16px;font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-weight:500;transition:.15s;margin-bottom:-1px;}
-.tab-btn:hover{color:var(--text);}
-.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
-.tab-panel{display:none;}
-.tab-panel.active{display:block;}
+/* tabs */
+.tabs{display:flex;border-bottom:1px solid var(--bd);margin-bottom:22px;}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--tx3);padding:8px 14px;font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-weight:500;transition:.12s;margin-bottom:-1px;}
+.tab:hover{color:var(--tx);}
+.tab.on{color:var(--tx);border-bottom-color:var(--tx);}
+.tp{display:none;}.tp.on{display:block;}
 
-/* ── Section ── */
-.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
-.sec-title{font-size:13px;font-weight:600;color:var(--text-2);letter-spacing:.04em;}
-.add-btn{background:var(--accent);color:white;border:none;padding:6px 14px;border-radius:var(--radius);cursor:pointer;font-size:13px;font-family:'Noto Sans JP',sans-serif;font-weight:500;transition:.12s;display:flex;align-items:center;gap:5px;}
-.add-btn:hover{background:#1a6fd4;}
+/* section header */
+.s-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.s-ttl{font-size:13px;font-weight:600;color:var(--tx2);}
+.s-hint{font-size:11px;font-weight:400;color:var(--tx3);margin-left:6px;}
+.add-btn{background:var(--tx);color:#fff;border:none;padding:5px 13px;border-radius:var(--r);cursor:pointer;font-size:13px;font-family:'Noto Sans JP',sans-serif;font-weight:600;transition:.12s;}
+.add-btn:hover{background:#333;}
 
-/* ── Clause row ── */
-.clause-list{display:flex;flex-direction:column;gap:4px;}
-.clause-row{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;display:flex;align-items:center;gap:12px;transition:border-color .12s,box-shadow .12s;cursor:default;}
-.clause-row:hover{border-color:var(--border-strong);box-shadow:var(--shadow);}
-.clause-row.drag-over{border-color:var(--accent);background:var(--accent-bg);}
-.clause-row.dragging{opacity:.4;border-style:dashed;}
-.drag-handle{color:var(--text-3);font-size:15px;cursor:grab;user-select:none;padding:0 2px;}
-.drag-handle:active{cursor:grabbing;}
+/* clause list */
+.cl-list{display:flex;flex-direction:column;gap:3px;}
+
+/* clause row — key: position:relative for drop indicator */
+.cl-row{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:10px 13px;display:flex;align-items:center;gap:11px;transition:border-color .1s,box-shadow .1s;position:relative;}
+.cl-row:hover{border-color:var(--bd2);box-shadow:var(--sh);}
+.cl-row.dragging{opacity:.35;border-style:dashed;}
+/* drop-above / drop-below show a line indicator */
+.cl-row.drop-above::before{content:'';position:absolute;top:-2px;left:0;right:0;height:2px;background:var(--blue);border-radius:2px;}
+.cl-row.drop-below::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:var(--blue);border-radius:2px;}
+.dh{color:var(--tx3);font-size:16px;cursor:grab;user-select:none;line-height:1;padding:2px 3px;border-radius:3px;transition:color .1s,background .1s;}
+.dh:hover{color:var(--tx2);background:var(--sf2);}
+.dh:active{cursor:grabbing;}
 .cl-info{flex:1;min-width:0;}
-.cl-name{font-size:13px;font-weight:500;color:var(--text);}
-.cl-meta{font-size:11px;color:var(--text-3);margin-top:1px;}
-.row-actions{display:flex;gap:6px;flex-shrink:0;}
-.edit-btn{background:none;border:1px solid var(--border);color:var(--text-2);padding:4px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.12s;}
-.edit-btn:hover{border-color:var(--accent);color:var(--accent);}
-.del-btn{background:none;border:1px solid var(--border);color:var(--text-3);padding:4px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.12s;}
-.del-btn:hover{border-color:var(--danger);color:var(--danger);}
+.cl-name{font-size:13px;font-weight:500;}
+.cl-meta{font-size:11px;color:var(--tx3);margin-top:1px;}
+.row-acts{display:flex;gap:5px;flex-shrink:0;}
+.e-btn{background:none;border:1px solid var(--bd);color:var(--tx2);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.e-btn:hover{border-color:var(--tx2);color:var(--tx);}
+.d-btn{background:none;border:1px solid var(--bd);color:var(--tx3);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.d-btn:hover{border-color:var(--red);color:var(--red);}
 
-/* ── Preset card ── */
-.preset-card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;display:flex;align-items:center;gap:12px;margin-bottom:4px;transition:border-color .12s;}
-.preset-card:hover{border-color:var(--border-strong);}
-.preset-info{flex:1;}
-.preset-name{font-size:13px;font-weight:500;}
-.preset-desc{font-size:12px;color:var(--text-3);margin-top:1px;}
+/* type tag */
+.tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;margin-left:6px;}
+.tag-n{background:var(--blue-bg);color:var(--blue);}
+.tag-s{background:var(--gr-bg);color:var(--gr);}
+.tag-c{background:#fdf3dc;color:#c17d10;}
 
-/* ── Empty state ── */
-.empty{text-align:center;padding:48px 24px;color:var(--text-3);font-size:13px;border:1px dashed var(--border);border-radius:var(--radius);}
-.empty-hint{font-size:12px;margin-top:6px;}
+/* preset card */
+.pr-card{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:11px 13px;display:flex;align-items:center;gap:11px;margin-bottom:3px;transition:border-color .1s;}
+.pr-card:hover{border-color:var(--bd2);}
+.pr-info{flex:1;}
+.pr-name{font-size:13px;font-weight:500;}
+.pr-desc{font-size:12px;color:var(--tx3);margin-top:1px;}
 
-/* ── Modal ── */
-.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:flex-start;justify-content:center;z-index:150;padding:40px 16px;overflow-y:auto;backdrop-filter:blur(2px);}
+/* empty */
+.empty{text-align:center;padding:40px 20px;color:var(--tx3);font-size:13px;border:1px dashed var(--bd);border-radius:var(--r);}
+
+/* modal */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.22);display:none;align-items:flex-start;justify-content:center;z-index:150;padding:36px 16px;overflow-y:auto;backdrop-filter:blur(2px);}
 .modal-ov.open{display:flex;}
-.modal{background:var(--bg);border:1px solid var(--border);border-radius:10px;width:700px;max-width:100%;padding:24px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--shadow-lg);margin-bottom:40px;}
-.modal h3{font-size:16px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);padding-bottom:12px;}
-
-/* ── Form ── */
-.form-row{display:flex;flex-direction:column;gap:4px;}
-.form-row label{font-size:12px;font-weight:500;color:var(--text-2);}
-.form-input,.form-select,.form-textarea{background:var(--surface);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:var(--radius);font-family:'Noto Sans JP',sans-serif;font-size:13px;transition:.12s;width:100%;}
-.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--accent);background:var(--bg);box-shadow:0 0 0 2px var(--accent-bg);}
-.form-textarea{min-height:68px;resize:vertical;line-height:1.6;}
-.form-select option{background:var(--bg);}
-.help-text{font-size:11px;color:var(--text-3);margin-top:2px;line-height:1.5;}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-
-/* ── Dynamic sections ── */
-.dyn-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;}
-.dyn-title{font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
-.dyn-add{background:none;border:1px dashed var(--border-strong);color:var(--text-3);padding:4px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.12s;}
-.dyn-add:hover{border-color:var(--accent);color:var(--accent);}
-.dyn-item{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;}
+.modal{background:var(--bg);border:1px solid var(--bd);border-radius:8px;width:680px;max-width:100%;padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.12);margin-bottom:36px;}
+.modal h3{font-size:15px;font-weight:700;border-bottom:1px solid var(--bd);padding-bottom:11px;}
+.f-row{display:flex;flex-direction:column;gap:4px;}
+.f-row label{font-size:12px;font-weight:500;color:var(--tx2);}
+.f-in,.f-sel,.f-ta{background:var(--sf);border:1px solid var(--bd);color:var(--tx);padding:6px 9px;border-radius:var(--r);font-family:'Noto Sans JP',sans-serif;font-size:13px;width:100%;transition:.1s;}
+.f-in:focus,.f-sel:focus,.f-ta:focus{outline:none;border-color:var(--blue);background:var(--bg);box-shadow:0 0 0 2px var(--blue-bg);}
+.f-ta{min-height:66px;resize:vertical;line-height:1.6;}
+.help{font-size:11px;color:var(--tx3);margin-top:2px;line-height:1.5;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.dyn-sec{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:13px;}
+.dyn-ttl{font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;}
+.dyn-add{background:none;border:1px dashed var(--bd2);color:var(--tx3);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.dyn-add:hover{border-color:var(--blue);color:var(--blue);}
+.dyn-item{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:11px;margin-bottom:7px;}
 .dyn-item:last-child{margin-bottom:0;}
-.dyn-item-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-.dyn-item-label{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;}
-.dyn-remove{background:none;border:none;color:var(--text-3);cursor:pointer;font-size:15px;padding:0 3px;border-radius:3px;transition:.12s;}
-.dyn-remove:hover{background:var(--danger-bg);color:var(--danger);}
+.dyn-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;}
+.dyn-lbl{font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.04em;}
+.dyn-rm{background:none;border:none;color:var(--tx3);cursor:pointer;font-size:14px;padding:0 3px;border-radius:3px;transition:.1s;}
+.dyn-rm:hover{background:var(--red-bg);color:var(--red);}
+.m-acts{display:flex;gap:7px;justify-content:flex-end;border-top:1px solid var(--bd);padding-top:13px;margin-top:3px;}
+.sv-btn{background:var(--tx);color:#fff;border:none;padding:7px 18px;border-radius:var(--r);font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.sv-btn:hover{background:#333;}
+.cn-btn{background:none;border:1px solid var(--bd);color:var(--tx2);padding:7px 14px;border-radius:var(--r);font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.cn-btn:hover{background:var(--sf2);}
 
-/* ── Modal actions ── */
-.modal-actions{display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:14px;margin-top:4px;}
-.save-btn{background:var(--accent);color:white;border:none;padding:8px 20px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:.12s;}
-.save-btn:hover{background:#1a6fd4;}
-.cancel-btn{background:none;border:1px solid var(--border);color:var(--text-2);padding:8px 16px;border-radius:var(--radius);font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:.12s;}
-.cancel-btn:hover{background:var(--surface);}
-
-/* ── Guide ── */
-.guide-block{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;font-size:13px;line-height:1.9;max-width:640px;}
-.guide-block h4{font-size:12px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px;border-top:1px solid var(--border);padding-top:14px;}
-.guide-block h4:first-child{border-top:none;margin-top:0;padding-top:0;}
-.guide-block code{background:var(--surface2);border:1px solid var(--border);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent);}
-.guide-block pre{background:var(--surface2);border:1px solid var(--border);padding:12px;border-radius:var(--radius);font-size:12px;color:var(--text-2);font-family:'JetBrains Mono',monospace;white-space:pre-wrap;margin-top:6px;line-height:1.7;}
-
-/* ── Type tag ── */
-.type-tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;padding:2px 6px;border-radius:3px;letter-spacing:.04em;}
-.tag-num{background:var(--accent-bg);color:var(--accent);}
-.tag-sel{background:var(--green-bg);color:var(--green);}
-.tag-combo{background:var(--amber-bg);color:var(--amber);}
+/* guide */
+.guide{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:20px 22px;font-size:13px;line-height:1.9;max-width:600px;}
+.guide h4{font-size:11px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin:15px 0 5px;border-top:1px solid var(--bd);padding-top:13px;}
+.guide h4:first-child{border-top:none;margin-top:0;padding-top:0;}
+.guide code{background:var(--sf2);border:1px solid var(--bd);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--blue);}
+.guide pre{background:var(--sf2);border:1px solid var(--bd);padding:10px 12px;border-radius:var(--r);font-size:11px;color:var(--tx2);font-family:'JetBrains Mono',monospace;white-space:pre-wrap;margin-top:5px;line-height:1.8;}
 </style>
 </head>
 <body>
 
-<!-- Login -->
 <div id="login-screen">
   <div class="login-card">
-    <div style="font-size:32px">🛡️</div>
+    <div style="font-size:28px">🛡️</div>
     <h2>管理者パネル</h2>
     <p>Googleアカウントでログインしてください。管理者として登録されたアカウントのみ入室できます。</p>
-    <button class="google-btn" onclick="loginWithGoogle()">
-      <img src="https://www.google.com/favicon.ico" alt="">
-      Googleでログイン
-    </button>
+    <button class="g-btn" onclick="loginWithGoogle()"><img src="https://www.google.com/favicon.ico" alt="">Googleでログイン</button>
   </div>
 </div>
 
-<!-- Loading -->
 <div id="loading-screen" style="display:none">
   <div class="spin"></div>
-  <span style="font-size:13px;color:var(--text-3)">認証を確認しています…</span>
+  <span style="font-size:13px;color:var(--tx3)">認証を確認しています…</span>
 </div>
 
-<!-- Notice -->
-<div id="notice"></div>
+<div id="toast"></div>
 
-<!-- Admin -->
 <div id="admin-screen" style="display:none">
   <header class="topbar">
-    <span class="topbar-logo">模擬戦 Regulation</span>
-    <span class="topbar-sep">/</span>
-    <span class="admin-badge">ADMIN</span>
-    <div class="topbar-right">
-      <div class="user-info">
-        <img id="user-avatar" src="" alt="">
-        <span id="user-name"></span>
-      </div>
-      <a class="topbar-link" href="index.html">← ユーザー画面</a>
-      <button class="logout-btn" onclick="logout()">ログアウト</button>
+    <span class="t-logo">模擬戦 Regulation</span>
+    <span class="t-sep">/</span>
+    <span class="badge">ADMIN</span>
+    <div class="t-right">
+      <div class="u-info"><img id="u-av" src="" alt=""><span id="u-name"></span></div>
+      <a class="t-link" href="index.html">← ユーザー画面</a>
+      <button class="t-logout" onclick="logout()">ログアウト</button>
     </div>
   </header>
 
-  <div class="admin-wrap">
+  <div class="wrap">
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('clauses',this)">条文管理</button>
-      <button class="tab-btn" onclick="switchTab('presets',this)">プリセット管理</button>
-      <button class="tab-btn" onclick="switchTab('guide',this)">使い方</button>
+      <button class="tab on" onclick="switchTab('clauses',this)">条文管理</button>
+      <button class="tab" onclick="switchTab('presets',this)">プリセット管理</button>
+      <button class="tab" onclick="switchTab('guide',this)">使い方</button>
     </div>
 
-    <!-- Clauses -->
-    <div class="tab-panel active" id="tab-clauses">
-      <div class="sec-hd">
-        <span class="sec-title">条文一覧 <span style="font-size:11px;font-weight:400;color:var(--text-3)">— ドラッグで並び替え可能</span></span>
-        <button class="add-btn" onclick="openClauseModal(null)">＋ 追加</button>
+    <div class="tp on" id="tp-clauses">
+      <div class="s-hd">
+        <span class="s-ttl">条文一覧<span class="s-hint">— ドラッグで並び替え</span></span>
+        <button class="add-btn" onclick="openCModal(null)">＋ 追加</button>
       </div>
-      <div class="clause-list" id="clause-list"></div>
+      <div class="cl-list" id="cl-list"></div>
     </div>
 
-    <!-- Presets -->
-    <div class="tab-panel" id="tab-presets">
-      <div class="sec-hd">
-        <span class="sec-title">プリセット一覧</span>
-        <button class="add-btn" onclick="openPresetModal(null)">＋ 追加</button>
+    <div class="tp" id="tp-presets">
+      <div class="s-hd">
+        <span class="s-ttl">プリセット一覧</span>
+        <button class="add-btn" onclick="openPModal(null)">＋ 追加</button>
       </div>
-      <div id="preset-list-admin"></div>
+      <div id="pr-list"></div>
     </div>
 
-    <!-- Guide -->
-    <div class="tab-panel" id="tab-guide">
-      <div class="guide-block">
+    <div class="tp" id="tp-guide">
+      <div class="guide">
         <h4>テンプレート文字列</h4>
-        <p>条文テキストに <code>{{変数名}}</code> を埋め込むと、入力フォームの値が自動で挿入されます。</p>
-
-        <h4>NUM（数値入力のみ）</h4>
+        <p>条文テキストに <code>{{変数名}}</code> を埋め込むと入力値が挿入されます。</p>
+        <h4>NUM</h4>
         <pre>テキスト:  金床を{{max_anvil}}段以上重ねてはいけない。
 変数名:    max_anvil</pre>
-
-        <h4>SELECT / COMBO（選択肢）</h4>
+        <h4>SELECT / COMBO</h4>
         <pre>選択肢A:   1ターンに一度のみ射撃できる。
-選択肢B:   {{tick_count}} game tickの間であれば複数回射撃できる。
-変数名:    tick_count</pre>
-
-        <h4>サブオプション（付加条文チェックボックス）</h4>
-        <pre>サブテキスト:  なお、z軸方向のみ最大{{z_max}}ブロックはみ出しても良い。
-変数名:        z_max</pre>
-
-        <h4>管理者の追加方法</h4>
-        <p>Firebase コンソール → Firestore → <code>admins</code> コレクションに追加したいGmailアドレスをドキュメントIDとして登録し、フィールド <code>role: "admin"</code> を設定してください。</p>
+選択肢B:   {{tick_count}} game tickの間であれば複数回射撃できる。</pre>
+        <h4>サブオプション</h4>
+        <pre>テキスト:  なお、z軸方向のみ最大{{z_max}}ブロックはみ出して良い。</pre>
+        <h4>管理者の追加</h4>
+        <p>Firebase コンソール → Firestore → <code>admins</code> コレクションにGmailを<br>ドキュメントIDとして追加し、フィールド <code>role: "admin"</code> を設定。</p>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Clause Modal -->
-<div class="modal-ov" id="clause-modal" onclick="if(event.target===this)closeClauseModal()">
+<div class="modal-ov" id="c-modal" onclick="if(event.target===this)closeCModal()">
   <div class="modal">
-    <h3 id="clause-modal-title">条文を追加</h3>
-    <input type="hidden" id="c-id">
-    <input type="hidden" id="c-order">
-
-    <div class="grid2">
-      <div class="form-row">
-        <label>条文タイトル *</label>
-        <input class="form-input" id="c-title" placeholder="例：戦車最大サイズ">
-      </div>
-      <div class="form-row">
-        <label>タイプ *</label>
-        <select class="form-select" id="c-type" onchange="onTypeChange()">
+    <h3 id="c-modal-ttl">条文を追加</h3>
+    <input type="hidden" id="c-id"><input type="hidden" id="c-ord">
+    <div class="g2">
+      <div class="f-row"><label>条文タイトル *</label><input class="f-in" id="c-ttl" placeholder="例：戦車最大サイズ"></div>
+      <div class="f-row"><label>タイプ *</label>
+        <select class="f-sel" id="c-type" onchange="onTypeChg()">
           <option value="num">NUM — 数値入力のみ</option>
           <option value="select">SELECT — 選択のみ</option>
           <option value="combo">COMBO — 選択＋数値</option>
         </select>
       </div>
     </div>
-
-    <div class="form-row" style="max-width:220px">
-      <label>デフォルト状態</label>
-      <select class="form-select" id="c-default-enabled">
-        <option value="true">有効（ON）</option>
-        <option value="false">無効（OFF）</option>
-      </select>
+    <div class="f-row" style="max-width:200px"><label>デフォルト状態</label>
+      <select class="f-sel" id="c-def"><option value="true">有効（ON）</option><option value="false">無効（OFF）</option></select>
     </div>
-
-    <!-- NUM -->
-    <div id="num-fields">
-      <div class="dyn-section">
-        <div class="dyn-title">入力フォーム項目 <button class="dyn-add" onclick="addInput()">＋ 項目を追加</button></div>
-        <div id="inputs-container"></div>
+    <div id="num-flds">
+      <div class="dyn-sec">
+        <div class="dyn-ttl">入力フォーム項目 <button class="dyn-add" onclick="addInp()">＋ 追加</button></div>
+        <div id="inp-con"></div>
       </div>
-      <div class="form-row" style="margin-top:12px">
+      <div class="f-row" style="margin-top:11px">
         <label>条文テキスト（<code style="font-size:11px">{{変数名}}</code> で値を埋め込む）</label>
-        <textarea class="form-textarea" id="c-text-template" placeholder="例：金床を{{max_anvil}}段以上重ねてはいけない。"></textarea>
+        <textarea class="f-ta" id="c-tmpl" placeholder="例：金床を{{max_anvil}}段以上重ねてはいけない。"></textarea>
       </div>
     </div>
-
-    <!-- SELECT / COMBO -->
-    <div id="option-fields" style="display:none">
-      <div class="dyn-section">
-        <div class="dyn-title">選択肢 <button class="dyn-add" onclick="addOption()">＋ 選択肢を追加</button></div>
-        <div id="options-container"></div>
+    <div id="opt-flds" style="display:none">
+      <div class="dyn-sec">
+        <div class="dyn-ttl">選択肢 <button class="dyn-add" onclick="addOpt()">＋ 追加</button></div>
+        <div id="opt-con"></div>
       </div>
     </div>
-
-    <div class="modal-actions">
-      <button class="cancel-btn" onclick="closeClauseModal()">キャンセル</button>
-      <button class="save-btn" onclick="submitClause()">保存</button>
+    <div class="m-acts">
+      <button class="cn-btn" onclick="closeCModal()">キャンセル</button>
+      <button class="sv-btn" onclick="submitC()">保存</button>
     </div>
   </div>
 </div>
 
 <!-- Preset Modal -->
-<div class="modal-ov" id="preset-modal" onclick="if(event.target===this)closePresetModal()">
+<div class="modal-ov" id="p-modal" onclick="if(event.target===this)closePModal()">
   <div class="modal">
-    <h3 id="preset-modal-title">プリセットを追加</h3>
+    <h3 id="p-modal-ttl">プリセットを追加</h3>
     <input type="hidden" id="p-id">
-    <div class="grid2">
-      <div class="form-row">
-        <label>プリセット名 *</label>
-        <input class="form-input" id="p-name" placeholder="例：スタンダード">
-      </div>
-      <div class="form-row">
-        <label>説明</label>
-        <input class="form-input" id="p-desc" placeholder="例：バランスの取れた標準的な規定">
-      </div>
+    <div class="g2">
+      <div class="f-row"><label>プリセット名 *</label><input class="f-in" id="p-name" placeholder="例：スタンダード"></div>
+      <div class="f-row"><label>説明</label><input class="f-in" id="p-desc" placeholder="例：標準的な規定"></div>
     </div>
-    <div class="form-row">
+    <div class="f-row">
       <label>設定データ（JSON）</label>
-      <textarea class="form-textarea" id="p-config" style="min-height:160px;font-family:'JetBrains Mono',monospace;font-size:12px" placeholder='{"clause_id":{"enabled":true,"selectedOption":"opt_id"}}'></textarea>
-      <span class="help-text">条文IDをキー、各条文の状態をJSONで記述。詳細は「使い方」タブを参照。</span>
+      <textarea class="f-ta" id="p-cfg" style="min-height:150px;font-family:'JetBrains Mono',monospace;font-size:12px" placeholder='{"clause_id":{"enabled":true,"selectedOption":"opt_id"}}'></textarea>
+      <span class="help">条文IDをキー、各条文の状態をJSONで記述。詳細は「使い方」タブを参照。</span>
     </div>
-    <div class="modal-actions">
-      <button class="cancel-btn" onclick="closePresetModal()">キャンセル</button>
-      <button class="save-btn" onclick="submitPreset()">保存</button>
+    <div class="m-acts">
+      <button class="cn-btn" onclick="closePModal()">キャンセル</button>
+      <button class="sv-btn" onclick="submitP()">保存</button>
     </div>
   </div>
 </div>
 
 <script>
-// ── Notice ────────────────────────────────────────────────────────────────────
-let _noticeTimer;
-function showNotice(msg, type='success') {
-  const el = document.getElementById('notice');
-  el.textContent = msg;
-  el.className = 'show '+type;
-  clearTimeout(_noticeTimer);
-  _noticeTimer = setTimeout(()=>{ el.className=''; }, type==='success'?3000:5000);
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let _tt;
+function toast(msg,type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='show '+type;
+  clearTimeout(_tt); _tt=setTimeout(()=>{el.className='';},type==='ok'?3000:5000);
 }
-window.showNotice = showNotice;
+window.toast=toast;
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
-  btn.classList.add('active');
+function switchTab(name,btn){
+  document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  document.getElementById('tp-'+name).classList.add('on'); btn.classList.add('on');
 }
 
-// ── Render Clauses ────────────────────────────────────────────────────────────
-function renderClauses() {
-  const list = document.getElementById('clause-list');
-  const clauses = window._clauses||[];
-  if (!clauses.length) {
-    list.innerHTML = '<div class="empty">条文がまだありません。<div class="empty-hint">「＋ 追加」ボタンから最初の条文を作成してください。</div></div>';
-    return;
-  }
-  list.innerHTML = '';
-  clauses.forEach((c,i) => {
-    const tagClass = c.type==='num'?'tag-num':c.type==='select'?'tag-sel':'tag-combo';
-    const tagLabel = c.type==='num'?'NUM':c.type==='select'?'SELECT':'COMBO';
-    const row = document.createElement('div');
-    row.className = 'clause-row';
-    row.id = 'cr-'+c.id;
-    row.draggable = true;
-    row.innerHTML = `
-      <span class="drag-handle" title="ドラッグで並び替え">⠿</span>
+// ── Drag & Drop ───────────────────────────────────────────────────────────────
+// Uses a proper position-based approach:
+// dragSrcId tracks the dragged item; dragover computes above/below via mouse Y
+let dragSrcId=null;
+
+function renderClauses(){
+  const list=document.getElementById('cl-list');
+  const cl=window._cl||[];
+  if(!cl.length){list.innerHTML='<div class="empty">条文がまだありません。「＋ 追加」から作成してください。</div>';return;}
+  list.innerHTML='';
+  cl.forEach((c,i)=>{
+    const tc=c.type==='num'?'tag-n':c.type==='select'?'tag-s':'tag-c';
+    const tl=c.type==='num'?'NUM':c.type==='select'?'SELECT':'COMBO';
+    const row=document.createElement('div');
+    row.className='cl-row'; row.id='cr-'+c.id; row.draggable=true;
+    row.innerHTML=`
+      <span class="dh" title="ドラッグで並び替え">⠿</span>
       <div class="cl-info">
-        <div class="cl-name">${String(i+1).padStart(2,'0')}. ${c.title} <span class="type-tag ${tagClass}" style="margin-left:6px">${tagLabel}</span></div>
+        <div class="cl-name">${String(i+1).padStart(2,'0')}. ${c.title}<span class="tag ${tc}">${tl}</span></div>
         <div class="cl-meta">デフォルト: ${c.defaultEnabled!==false?'有効':'無効'}</div>
       </div>
-      <div class="row-actions">
-        <button class="edit-btn" onclick="openClauseModal('${c.id}')">編集</button>
-        <button class="del-btn" onclick="deleteClause('${c.id}')">削除</button>
+      <div class="row-acts">
+        <button class="e-btn" onclick="openCModal('${c.id}')">編集</button>
+        <button class="d-btn" onclick="deleteClause('${c.id}')">削除</button>
       </div>`;
-    // Drag events
-    row.addEventListener('dragstart', e => { dragSrcId=c.id; row.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
-    row.addEventListener('dragend', () => { row.classList.remove('dragging'); document.querySelectorAll('.clause-row').forEach(r=>r.classList.remove('drag-over')); });
-    row.addEventListener('dragover', e => { e.preventDefault(); row.classList.add('drag-over'); });
-    row.addEventListener('dragleave', () => row.classList.remove('drag-over'));
-    row.addEventListener('drop', e => {
-      e.preventDefault(); row.classList.remove('drag-over');
-      if (!dragSrcId || dragSrcId===c.id) return;
-      const clauses = window._clauses;
-      const fi=clauses.findIndex(x=>x.id===dragSrcId), ti=clauses.findIndex(x=>x.id===c.id);
-      const [moved]=clauses.splice(fi,1); clauses.splice(ti,0,moved);
-      window._clauses=clauses; renderClauses(); saveOrder(clauses.map(x=>x.id));
+
+    row.addEventListener('dragstart', e=>{
+      dragSrcId=c.id;
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain', c.id);
+    });
+    row.addEventListener('dragend', ()=>{
+      dragSrcId=null;
+      row.classList.remove('dragging');
+      document.querySelectorAll('.cl-row').forEach(r=>{r.classList.remove('drop-above','drop-below');});
+    });
+    row.addEventListener('dragover', e=>{
+      e.preventDefault(); e.dataTransfer.dropEffect='move';
+      if(!dragSrcId || dragSrcId===c.id) return;
+      // determine above/below by mouse position relative to row center
+      const rect=row.getBoundingClientRect();
+      const mid=rect.top+rect.height/2;
+      document.querySelectorAll('.cl-row').forEach(r=>{r.classList.remove('drop-above','drop-below');});
+      row.classList.add(e.clientY<mid?'drop-above':'drop-below');
+    });
+    row.addEventListener('dragleave', e=>{
+      // only remove if leaving to outside this element entirely
+      if(!row.contains(e.relatedTarget)){
+        row.classList.remove('drop-above','drop-below');
+      }
+    });
+    row.addEventListener('drop', e=>{
+      e.preventDefault();
+      row.classList.remove('drop-above','drop-below');
+      if(!dragSrcId||dragSrcId===c.id)return;
+      const cl=window._cl;
+      const fi=cl.findIndex(x=>x.id===dragSrcId);
+      const ti=cl.findIndex(x=>x.id===c.id);
+      if(fi===-1||ti===-1)return;
+      // determine insert position based on drop-above/below
+      const rect=row.getBoundingClientRect();
+      const above=e.clientY<rect.top+rect.height/2;
+      const[moved]=cl.splice(fi,1);
+      // recalculate ti after removal
+      const newTi=cl.findIndex(x=>x.id===c.id);
+      cl.splice(above?newTi:newTi+1,0,moved);
+      window._cl=cl; renderClauses(); saveOrder(cl.map(x=>x.id));
+      dragSrcId=null;
     });
     list.appendChild(row);
   });
 }
-let dragSrcId = null;
 
-// ── Render Presets ────────────────────────────────────────────────────────────
-function renderPresets() {
-  const list = document.getElementById('preset-list-admin');
-  const presets = window._presets||[];
-  if (!presets.length) {
-    list.innerHTML = '<div class="empty">プリセットがまだありません。</div>';
-    return;
-  }
-  list.innerHTML = presets.map(p => `
-    <div class="preset-card">
-      <div class="preset-info">
-        <div class="preset-name">${p.name}</div>
-        ${p.description?`<div class="preset-desc">${p.description}</div>`:''}
-      </div>
-      <div class="row-actions">
-        <button class="edit-btn" onclick="openPresetModal('${p.id}')">編集</button>
-        <button class="del-btn" onclick="deletePreset('${p.id}')">削除</button>
-      </div>
+function renderPresets(){
+  const list=document.getElementById('pr-list');
+  const pr=window._pr||[];
+  if(!pr.length){list.innerHTML='<div class="empty">プリセットがまだありません。</div>';return;}
+  list.innerHTML=pr.map(p=>`
+    <div class="pr-card">
+      <div class="pr-info"><div class="pr-name">${p.name}</div>${p.description?`<div class="pr-desc">${p.description}</div>`:''}</div>
+      <div class="row-acts"><button class="e-btn" onclick="openPModal('${p.id}')">編集</button><button class="d-btn" onclick="deletePreset('${p.id}')">削除</button></div>
     </div>`).join('');
 }
-window.renderClauses = renderClauses;
-window.renderPresets = renderPresets;
+window.renderClauses=renderClauses; window.renderPresets=renderPresets;
 
 // ── Clause Modal ──────────────────────────────────────────────────────────────
-let _ic=0, _oc=0;
-function openClauseModal(id) {
-  _ic=0; _oc=0;
-  document.getElementById('inputs-container').innerHTML='';
-  document.getElementById('options-container').innerHTML='';
-  document.getElementById('c-text-template').value='';
-  if (id) {
-    const c=window._clauses.find(x=>x.id===id);
-    document.getElementById('clause-modal-title').textContent='条文を編集';
+let _ic=0,_oc=0;
+function openCModal(id){
+  _ic=0;_oc=0;
+  document.getElementById('inp-con').innerHTML='';
+  document.getElementById('opt-con').innerHTML='';
+  document.getElementById('c-tmpl').value='';
+  if(id){
+    const c=window._cl.find(x=>x.id===id);
+    document.getElementById('c-modal-ttl').textContent='条文を編集';
     document.getElementById('c-id').value=c.id;
-    document.getElementById('c-order').value=c.order??0;
-    document.getElementById('c-title').value=c.title||'';
+    document.getElementById('c-ord').value=c.order??0;
+    document.getElementById('c-ttl').value=c.title||'';
     document.getElementById('c-type').value=c.type||'num';
-    document.getElementById('c-default-enabled').value=String(c.defaultEnabled!==false);
-    onTypeChange();
-    if (c.type==='num') { document.getElementById('c-text-template').value=c.textTemplate||''; (c.inputs||[]).forEach(i=>addInput(i)); }
-    else { (c.options||[]).forEach(o=>addOption(o)); }
-  } else {
-    document.getElementById('clause-modal-title').textContent='条文を追加';
+    document.getElementById('c-def').value=String(c.defaultEnabled!==false);
+    onTypeChg();
+    if(c.type==='num'){document.getElementById('c-tmpl').value=c.textTemplate||'';(c.inputs||[]).forEach(i=>addInp(i));}
+    else{(c.options||[]).forEach(o=>addOpt(o));}
+  }else{
+    document.getElementById('c-modal-ttl').textContent='条文を追加';
     document.getElementById('c-id').value='';
-    document.getElementById('c-order').value=(window._clauses||[]).length;
-    document.getElementById('c-title').value='';
+    document.getElementById('c-ord').value=(window._cl||[]).length;
+    document.getElementById('c-ttl').value='';
     document.getElementById('c-type').value='num';
-    document.getElementById('c-default-enabled').value='true';
-    onTypeChange(); addInput();
+    document.getElementById('c-def').value='true';
+    onTypeChg();addInp();
   }
-  document.getElementById('clause-modal').classList.add('open');
+  document.getElementById('c-modal').classList.add('open');
 }
-function closeClauseModal(){document.getElementById('clause-modal').classList.remove('open');}
+function closeCModal(){document.getElementById('c-modal').classList.remove('open');}
+function onTypeChg(){const t=document.getElementById('c-type').value;document.getElementById('num-flds').style.display=t==='num'?'block':'none';document.getElementById('opt-flds').style.display=t!=='num'?'block':'none';}
 
-function onTypeChange(){
-  const t=document.getElementById('c-type').value;
-  document.getElementById('num-fields').style.display=t==='num'?'block':'none';
-  document.getElementById('option-fields').style.display=t!=='num'?'block':'none';
-}
-
-function addInput(data={}) {
-  const i=_ic++;
-  const div=document.createElement('div'); div.className='dyn-item';
-  div.innerHTML=`
-    <div class="dyn-item-hd"><span class="dyn-item-label">項目 ${i+1}</span><button class="dyn-remove" onclick="this.closest('.dyn-item').remove()">✕</button></div>
-    <div class="grid2">
-      <div class="form-row"><label>変数名（英数字・アンダースコア）</label><input class="form-input" id="inp-id-${i}" value="${data.id||''}" placeholder="例: max_anvil"></div>
-      <div class="form-row"><label>ラベル</label><input class="form-input" id="inp-label-${i}" value="${data.label||''}" placeholder="例: 最大積み重ね数"></div>
-      <div class="form-row"><label>デフォルト値</label><input class="form-input" type="number" id="inp-default-${i}" value="${data.default??1}"></div>
-      <div class="form-row"><label>単位（任意）</label><input class="form-input" id="inp-unit-${i}" value="${data.unit||''}" placeholder="例: 段"></div>
+function addInp(d={}){
+  const i=_ic++;const div=document.createElement('div');div.className='dyn-item';
+  div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">項目 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>
+    <div class="g2">
+      <div class="f-row"><label>変数名</label><input class="f-in" id="ii-${i}" value="${d.id||''}" placeholder="例: max_anvil"></div>
+      <div class="f-row"><label>ラベル</label><input class="f-in" id="il-${i}" value="${d.label||''}" placeholder="例: 最大積み重ね数"></div>
+      <div class="f-row"><label>デフォルト値</label><input class="f-in" type="number" id="id-${i}" value="${d.default??1}"></div>
+      <div class="f-row"><label>単位（任意）</label><input class="f-in" id="iu-${i}" value="${d.unit||''}" placeholder="例: 段"></div>
     </div>`;
-  document.getElementById('inputs-container').appendChild(div);
+  document.getElementById('inp-con').appendChild(div);
 }
 
-function addOption(data={}) {
-  const i=_oc++; const isCombo=document.getElementById('c-type').value==='combo';
-  const div=document.createElement('div'); div.className='dyn-item';
-  div.innerHTML=`
-    <div class="dyn-item-hd"><span class="dyn-item-label">選択肢 ${i+1}</span><button class="dyn-remove" onclick="this.closest('.dyn-item').remove()">✕</button></div>
-    <div class="grid2">
-      <div class="form-row"><label>選択肢ID（英数字）</label><input class="form-input" id="opt-id-${i}" value="${data.id||''}" placeholder="例: with_limit"></div>
-      <div class="form-row"><label>ラベル</label><input class="form-input" id="opt-label-${i}" value="${data.label||''}" placeholder="例: 最大範囲を設定する"></div>
+function addOpt(d={}){
+  const i=_oc++;const isC=document.getElementById('c-type').value==='combo';
+  const div=document.createElement('div');div.className='dyn-item';
+  div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">選択肢 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>
+    <div class="g2">
+      <div class="f-row"><label>選択肢ID</label><input class="f-in" id="oi-${i}" value="${d.id||''}" placeholder="例: with_limit"></div>
+      <div class="f-row"><label>ラベル</label><input class="f-in" id="ol-${i}" value="${d.label||''}" placeholder="例: 最大範囲を設定する"></div>
     </div>
-    <div class="form-row"><label>条文テキスト</label><textarea class="form-textarea" id="opt-text-${i}">${data.textTemplate||''}</textarea></div>
-    ${isCombo?`
-    <div class="form-row"><label>入力フォーム（JSON配列）</label>
-      <textarea class="form-textarea" id="opt-inputs-${i}" style="font-family:'JetBrains Mono',monospace;font-size:11px;min-height:72px">${JSON.stringify(data.inputs||[],null,2)}</textarea>
-      <span class="help-text">例: [{"id":"tr_x","label":"X","default":5,"unit":""}]</span></div>
-    <div class="form-row"><label>サブオプション（JSON配列）</label>
-      <textarea class="form-textarea" id="opt-subs-${i}" style="font-family:'JetBrains Mono',monospace;font-size:11px;min-height:72px">${JSON.stringify(data.subOptions||[],null,2)}</textarea>
-      <span class="help-text">例: [{"id":"z_overhang","label":"はみ出し許容","defaultChecked":true,"inputs":[...],"textTemplate":"なお{{z_max}}ブロックはみ出しても良い。"}]</span></div>
-    `:''}`;
-  document.getElementById('options-container').appendChild(div);
+    <div class="f-row"><label>条文テキスト</label><textarea class="f-ta" id="ot-${i}">${d.textTemplate||''}</textarea></div>
+    ${isC?`<div class="f-row"><label>入力フォーム（JSON配列）</label>
+      <textarea class="f-ta" id="oinp-${i}" style="font-family:'JetBrains Mono',monospace;font-size:11px;min-height:66px">${JSON.stringify(d.inputs||[],null,2)}</textarea>
+      <span class="help">例: [{"id":"tr_x","label":"X","default":5,"unit":""}]</span></div>
+    <div class="f-row"><label>サブオプション（JSON配列）</label>
+      <textarea class="f-ta" id="osub-${i}" style="font-family:'JetBrains Mono',monospace;font-size:11px;min-height:66px">${JSON.stringify(d.subOptions||[],null,2)}</textarea>
+      <span class="help">例: [{"id":"z_overhang","label":"はみ出し許容","defaultChecked":true,"inputs":[...],"textTemplate":"なお{{z_max}}ブロック…"}]</span></div>`:''}`;
+  document.getElementById('opt-con').appendChild(div);
 }
 
-function collectInputs() {
-  return Array.from(document.querySelectorAll('#inputs-container .dyn-item')).map((_,i)=>({
-    id:document.getElementById('inp-id-'+i)?.value.trim()||'field'+i,
-    label:document.getElementById('inp-label-'+i)?.value.trim()||'',
-    default:parseFloat(document.getElementById('inp-default-'+i)?.value)||0,
-    unit:document.getElementById('inp-unit-'+i)?.value.trim()||''
-  })).filter((_,i)=>document.getElementById('inp-id-'+i));
-}
+function colInps(){return Array.from(document.querySelectorAll('#inp-con .dyn-item')).map((_,i)=>({id:document.getElementById('ii-'+i)?.value.trim()||'f'+i,label:document.getElementById('il-'+i)?.value.trim()||'',default:parseFloat(document.getElementById('id-'+i)?.value)||0,unit:document.getElementById('iu-'+i)?.value.trim()||''})).filter((_,i)=>document.getElementById('ii-'+i));}
+function colOpts(){const isC=document.getElementById('c-type').value==='combo';return Array.from(document.querySelectorAll('#opt-con .dyn-item')).map((_,i)=>{const o={id:document.getElementById('oi-'+i)?.value.trim()||'o'+i,label:document.getElementById('ol-'+i)?.value.trim()||'',textTemplate:document.getElementById('ot-'+i)?.value.trim()||''};if(isC){try{o.inputs=JSON.parse(document.getElementById('oinp-'+i)?.value||'[]');}catch{o.inputs=[];}try{o.subOptions=JSON.parse(document.getElementById('osub-'+i)?.value||'[]');}catch{o.subOptions=[];}}return o;}).filter((_,i)=>document.getElementById('oi-'+i));}
 
-function collectOptions() {
-  const isCombo=document.getElementById('c-type').value==='combo';
-  return Array.from(document.querySelectorAll('#options-container .dyn-item')).map((_,i)=>{
-    const opt={id:document.getElementById('opt-id-'+i)?.value.trim()||'opt'+i, label:document.getElementById('opt-label-'+i)?.value.trim()||'', textTemplate:document.getElementById('opt-text-'+i)?.value.trim()||''};
-    if (isCombo) {
-      try{opt.inputs=JSON.parse(document.getElementById('opt-inputs-'+i)?.value||'[]');}catch{opt.inputs=[];}
-      try{opt.subOptions=JSON.parse(document.getElementById('opt-subs-'+i)?.value||'[]');}catch{opt.subOptions=[];}
-    }
-    return opt;
-  }).filter((_,i)=>document.getElementById('opt-id-'+i));
-}
-
-async function submitClause() {
-  const title=document.getElementById('c-title').value.trim();
-  const type=document.getElementById('c-type').value;
-  if (!title){showNotice('タイトルを入力してください','error');return;}
-  const data={id:document.getElementById('c-id').value||'clause_'+Date.now(),title,type,order:parseInt(document.getElementById('c-order').value)||0,defaultEnabled:document.getElementById('c-default-enabled').value==='true'};
-  if (type==='num'){data.inputs=collectInputs();data.textTemplate=document.getElementById('c-text-template').value.trim();}
-  else{data.options=collectOptions();}
-  const ok=await saveClause(data);
-  if(ok)closeClauseModal();
+async function submitC(){
+  const ttl=document.getElementById('c-ttl').value.trim();const type=document.getElementById('c-type').value;
+  if(!ttl){toast('タイトルを入力してください','err');return;}
+  const d={id:document.getElementById('c-id').value||'clause_'+Date.now(),title:ttl,type,order:parseInt(document.getElementById('c-ord').value)||0,defaultEnabled:document.getElementById('c-def').value==='true'};
+  if(type==='num'){d.inputs=colInps();d.textTemplate=document.getElementById('c-tmpl').value.trim();}
+  else{d.options=colOpts();}
+  if(await saveClause(d))closeCModal();
 }
 
 // ── Preset Modal ──────────────────────────────────────────────────────────────
-function openPresetModal(id) {
-  if (id) {
-    const p=window._presets.find(x=>x.id===id);
-    document.getElementById('preset-modal-title').textContent='プリセットを編集';
-    document.getElementById('p-id').value=p.id;
-    document.getElementById('p-name').value=p.name||'';
-    document.getElementById('p-desc').value=p.description||'';
-    document.getElementById('p-config').value=JSON.stringify(p.config||{},null,2);
-  } else {
-    document.getElementById('preset-modal-title').textContent='プリセットを追加';
-    document.getElementById('p-id').value='';
-    document.getElementById('p-name').value='';
-    document.getElementById('p-desc').value='';
-    document.getElementById('p-config').value='{}';
-  }
-  document.getElementById('preset-modal').classList.add('open');
+function openPModal(id){
+  if(id){const p=window._pr.find(x=>x.id===id);document.getElementById('p-modal-ttl').textContent='プリセットを編集';document.getElementById('p-id').value=p.id;document.getElementById('p-name').value=p.name||'';document.getElementById('p-desc').value=p.description||'';document.getElementById('p-cfg').value=JSON.stringify(p.config||{},null,2);}
+  else{document.getElementById('p-modal-ttl').textContent='プリセットを追加';document.getElementById('p-id').value='';document.getElementById('p-name').value='';document.getElementById('p-desc').value='';document.getElementById('p-cfg').value='{}';}
+  document.getElementById('p-modal').classList.add('open');
 }
-function closePresetModal(){document.getElementById('preset-modal').classList.remove('open');}
-
-async function submitPreset() {
-  const name=document.getElementById('p-name').value.trim();
-  if(!name){showNotice('プリセット名を入力してください','error');return;}
-  let config={};
-  try{config=JSON.parse(document.getElementById('p-config').value);}catch{showNotice('JSONが不正です','error');return;}
-  await savePreset({id:document.getElementById('p-id').value||'preset_'+Date.now(),name,description:document.getElementById('p-desc').value.trim(),config});
-  closePresetModal();
+function closePModal(){document.getElementById('p-modal').classList.remove('open');}
+async function submitP(){
+  const name=document.getElementById('p-name').value.trim();if(!name){toast('プリセット名を入力してください','err');return;}
+  let cfg={};try{cfg=JSON.parse(document.getElementById('p-cfg').value);}catch{toast('JSONが不正です','err');return;}
+  await savePreset({id:document.getElementById('p-id').value||'preset_'+Date.now(),name,description:document.getElementById('p-desc').value.trim(),config:cfg});
+  closePModal();
 }
 </script>
 </body>
