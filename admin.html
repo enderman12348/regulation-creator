@@ -114,10 +114,6 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans JP','Inter',san
 /* clause row — key: position:relative for drop indicator */
 .cl-row{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:10px 13px;display:flex;align-items:center;gap:11px;transition:border-color .1s,box-shadow .1s;position:relative;}
 .cl-row:hover{border-color:var(--bd2);box-shadow:var(--sh);}
-.cl-row.dragging{opacity:.35;border-style:dashed;}
-/* drop-above / drop-below show a line indicator */
-.cl-row.drop-above::before{content:'';position:absolute;top:-2px;left:0;right:0;height:2px;background:var(--blue);border-radius:2px;}
-.cl-row.drop-below::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:var(--blue);border-radius:2px;}
 .dh{color:var(--tx3);font-size:16px;cursor:grab;user-select:none;line-height:1;padding:2px 3px;border-radius:3px;transition:color .1s,background .1s;}
 .dh:hover{color:var(--tx2);background:var(--sf2);}
 .dh:active{cursor:grabbing;}
@@ -336,7 +332,6 @@ function switchTab(name,btn){
 // ── Drag & Drop ───────────────────────────────────────────────────────────────
 // Uses a proper position-based approach:
 // dragSrcId tracks the dragged item; dragover computes above/below via mouse Y
-let dragSrcId=null;
 
 function renderClauses(){
   const list=document.getElementById('cl-list');
@@ -355,9 +350,11 @@ function renderClauses(){
         <div class="cl-meta">デフォルト: ${c.defaultEnabled!==false?'有効':'無効'}</div>
       </div>
       <div class="row-acts">
-        <button class="e-btn" onclick="openCModal('${c.id}')">編集</button>
-        <button class="d-btn" onclick="deleteClause('${c.id}')">削除</button>
-      </div>`;
+       <button class="e-btn" onclick="moveClause('${c.id}',-1)">↑</button>
+       <button class="e-btn" onclick="moveClause('${c.id}',1)">↓</button>
+       <button class="e-btn" onclick="openCModal('${c.id}')">編集</button>
+       <button class="d-btn" onclick="deleteClause('${c.id}')">削除</button>
+      </div>
 
     row.addEventListener('dragstart', e=>{
       dragSrcId=c.id;
@@ -419,6 +416,51 @@ function renderPresets(){
 }
 window.renderClauses=renderClauses; window.renderPresets=renderPresets;
 
+async function moveClause(id, direction){
+
+    const list = [...window._cl];
+
+    const index = list.findIndex(x => x.id === id);
+
+    if(index === -1){
+        return;
+    }
+
+    const target = index + direction;
+
+    if(target < 0 || target >= list.length){
+        return;
+    }
+
+    [list[index], list[target]] =
+    [list[target], list[index]];
+
+    list.forEach((item, i) => {
+        item.order = i;
+    });
+
+    window._cl = list;
+
+    renderClauses();
+
+    try{
+
+        const ids = list.map(x => x.id);
+
+        await saveOrder(ids);
+
+        toast("並び順を保存しました");
+
+    }catch(err){
+
+        toast("保存に失敗しました","err");
+
+        console.error(err);
+
+    }
+
+}
+  
 // ── Clause Modal ──────────────────────────────────────────────────────────────
 let _ic=0,_oc=0;
 function openCModal(id){
