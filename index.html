@@ -8,243 +8,186 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  const firebaseConfig = {
-    apiKey: "AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",
-    authDomain: "regulation-creation-tool.firebaseapp.com",
-    projectId: "regulation-creation-tool",
-    storageBucket: "regulation-creation-tool.firebasestorage.app",
-    messagingSenderId: "743315732081",
-    appId: "1:743315732081:web:a2e78a376b403b15e80dd0"
+  const cfg = {
+    apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",
+    authDomain:"regulation-creation-tool.firebaseapp.com",
+    projectId:"regulation-creation-tool",
+    storageBucket:"regulation-creation-tool.firebasestorage.app",
+    messagingSenderId:"743315732081",
+    appId:"1:743315732081:web:a2e78a376b403b15e80dd0"
   };
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  const db = getFirestore(initializeApp(cfg));
   window.addEventListener('DOMContentLoaded', async () => {
     try {
-      const [cSnap, pSnap] = await Promise.all([
-        getDocs(collection(db,'clauses')),
-        getDocs(collection(db,'presets'))
-      ]);
-      const clauses = [];
-      cSnap.forEach(d => clauses.push({id:d.id,...d.data()}));
-      clauses.sort((a,b)=>(a.order??0)-(b.order??0));
-      const presets = [];
-      pSnap.forEach(d => presets.push({id:d.id,...d.data()}));
-      window._CLAUSES = clauses;
-      window._PRESETS = presets;
-      initState();
-      renderSidebar();
-      renderAll();
-    } catch(e) {
-      document.getElementById('load-error').style.display='flex';
-      console.error(e);
-    }
+      const [cSnap, pSnap] = await Promise.all([getDocs(collection(db,'clauses')), getDocs(collection(db,'presets'))]);
+      const clauses=[]; cSnap.forEach(d=>clauses.push({id:d.id,...d.data()})); clauses.sort((a,b)=>(a.order??0)-(b.order??0));
+      const presets=[]; pSnap.forEach(d=>presets.push({id:d.id,...d.data()}));
+      window._CLAUSES=clauses; window._PRESETS=presets;
+      initState(); renderSidebar(); renderAll();
+    } catch(e) { document.getElementById('load-error').style.display='flex'; console.error(e); }
     document.getElementById('loading').style.display='none';
   });
 </script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
-
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;600&display=swap');
 :root {
-  --bg: #ffffff;
-  --surface: #f7f7f5;
-  --surface2: #efeeea;
-  --border: #e3e2df;
-  --border-strong: #cfceca;
-  --text: #1a1a1a;
-  --text-2: #6b6b6b;
-  --text-3: #9b9a97;
-  --accent: #2f80ed;
-  --accent-bg: #e8f1fd;
-  --danger: #eb5757;
-  --danger-bg: #fdeaea;
-  --green: #0f9960;
-  --green-bg: #e4f5ef;
-  --amber: #c17d10;
-  --amber-bg: #fdf3dc;
-  --radius: 6px;
-  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
-  --shadow-lg: 0 4px 16px rgba(0,0,0,.12);
+  --bg:#ffffff; --surface:#f9f9f8; --surface2:#f1f0ef; --border:#e8e7e5;
+  --border2:#d3d2cf; --text:#191919; --text2:#6f6f6f; --text3:#aaa9a6;
+  --blue:#2383e2; --blue-bg:#edf4fd; --radius:5px;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 6px rgba(0,0,0,.04);
 }
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', 'Inter', sans-serif; font-size: 14px; line-height: 1.6; min-height: 100vh; }
+/* loading */
+#loading{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text3);font-size:13px;}
+#load-error{display:none;position:fixed;inset:0;background:var(--bg);z-index:300;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#e03e3e;font-size:13px;}
+.spin{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--text2);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-/* ── Loading ── */
-#loading { position: fixed; inset: 0; background: var(--bg); z-index: 300; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--text-3); font-size: 13px; }
-.spin { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
-@keyframes spin { to { transform: rotate(360deg); } }
-#load-error { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 300; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--danger); font-size: 13px; }
+/* layout */
+.app{display:grid;grid-template-columns:200px 1fr;grid-template-rows:44px 1fr;min-height:100vh;}
 
-/* ── Layout ── */
-.app { display: grid; grid-template-columns: 220px 1fr; grid-template-rows: 48px 1fr; min-height: 100vh; }
+/* topbar */
+.topbar{grid-column:1/-1;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:8px;background:var(--bg);position:sticky;top:0;z-index:50;}
+.t-logo{font-size:13px;font-weight:600;color:var(--text);letter-spacing:-.01em;}
+.t-sep{color:var(--border2);font-size:12px;}
+.t-sub{font-size:12px;color:var(--text3);}
+.t-right{margin-left:auto;}
+.t-link{font-size:12px;color:var(--text2);text-decoration:none;padding:3px 9px;border-radius:var(--radius);transition:background .12s;}
+.t-link:hover{background:var(--surface2);}
 
-/* ── Topbar ── */
-.topbar { grid-column: 1 / -1; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 20px; gap: 10px; background: var(--bg); position: sticky; top: 0; z-index: 50; }
-.topbar-logo { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: var(--text); letter-spacing: -.01em; }
-.topbar-sep { color: var(--border-strong); margin: 0 2px; }
-.topbar-sub { font-size: 12px; color: var(--text-3); }
-.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.topbar-link { font-size: 12px; color: var(--text-2); text-decoration: none; padding: 4px 10px; border-radius: var(--radius); transition: background .15s; }
-.topbar-link:hover { background: var(--surface); }
+/* sidebar */
+.sidebar{border-right:1px solid var(--border);padding:12px 8px;display:flex;flex-direction:column;gap:1px;background:var(--surface);overflow-y:auto;}
+.sb-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;padding:6px 8px 3px;margin-top:6px;}
+.sb-label:first-child{margin-top:0;}
+.p-btn{width:100%;background:none;border:none;color:var(--text2);padding:4px 8px;border-radius:var(--radius);cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:13px;text-align:left;transition:background .1s,color .1s;display:flex;flex-direction:column;gap:0;}
+.p-btn:hover{background:var(--surface2);color:var(--text);}
+.p-btn.active{background:#e8f0fa;color:var(--blue);}
+.p-btn .pd{font-size:11px;color:var(--text3);}
+.p-btn.active .pd{color:#93b8e8;}
+.sb-hr{border:none;border-top:1px solid var(--border);margin:6px 8px;}
+.sb-reset{width:100%;background:none;border:none;color:var(--text3);padding:4px 8px;border-radius:var(--radius);cursor:pointer;font-size:12px;text-align:left;transition:background .1s,color .1s;font-family:'Noto Sans JP',sans-serif;}
+.sb-reset:hover{background:#fdeaea;color:#e03e3e;}
 
-/* ── Sidebar ── */
-.sidebar { border-right: 1px solid var(--border); padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; background: var(--surface); }
-.sb-section { font-size: 11px; font-weight: 600; color: var(--text-3); letter-spacing: .06em; text-transform: uppercase; padding: 6px 8px 4px; margin-top: 8px; }
-.sb-section:first-child { margin-top: 0; }
-.preset-btn { width: 100%; background: none; border: none; color: var(--text-2); padding: 5px 8px; border-radius: var(--radius); cursor: pointer; font-family: 'Noto Sans JP', sans-serif; font-size: 13px; text-align: left; transition: background .12s, color .12s; display: flex; flex-direction: column; gap: 1px; }
-.preset-btn:hover { background: var(--surface2); color: var(--text); }
-.preset-btn.active { background: var(--accent-bg); color: var(--accent); }
-.preset-btn .pd { font-size: 11px; color: var(--text-3); font-weight: 400; }
-.preset-btn.active .pd { color: #6fa8dc; }
-.sb-div { border: none; border-top: 1px solid var(--border); margin: 8px 8px; }
-.reset-btn { width: 100%; background: none; border: none; color: var(--text-3); padding: 5px 8px; border-radius: var(--radius); cursor: pointer; font-size: 12px; text-align: left; transition: background .12s, color .12s; }
-.reset-btn:hover { background: var(--danger-bg); color: var(--danger); }
-.legend-row { display: flex; align-items: center; gap: 7px; padding: 3px 8px; }
-.legend-row span:first-child { font-size: 10px; font-weight: 600; font-family: 'JetBrains Mono', monospace; padding: 1px 5px; border-radius: 3px; }
+/* main */
+.main{padding:32px 40px;overflow-y:auto;max-width:800px;}
+.page-h{font-size:22px;font-weight:700;margin-bottom:3px;letter-spacing:-.02em;}
+.page-sub{font-size:13px;color:var(--text3);margin-bottom:28px;}
 
-/* ── Main ── */
-.main { padding: 32px 40px; overflow-y: auto; max-width: 860px; }
-.page-title { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-.page-meta { font-size: 12px; color: var(--text-3); margin-bottom: 24px; }
+/* clause card */
+.c-card{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;background:var(--bg);transition:opacity .2s,border-color .12s;}
+.c-card:hover{border-color:var(--border2);}
+.c-card.on{border-left:2.5px solid var(--text2);}
+.c-card.off{opacity:.4;}
+.c-hd{display:flex;align-items:center;gap:9px;padding:10px 13px;}
+.tog{position:relative;width:30px;height:16px;flex-shrink:0;cursor:pointer;}
+.tog input{opacity:0;width:0;height:0;}
+.tog-sl{position:absolute;inset:0;background:var(--border2);border-radius:16px;transition:background .18s;}
+.tog-sl::before{content:'';position:absolute;width:10px;height:10px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .18s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.tog input:checked+.tog-sl{background:var(--text);}
+.tog input:checked+.tog-sl::before{transform:translateX(14px);}
+.c-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text3);min-width:22px;}
+.c-ttl{font-size:14px;font-weight:500;flex:1;}
+.c-body{padding:0 13px 13px 42px;display:flex;flex-direction:column;gap:9px;}
+.c-body.hide{display:none;}
 
-/* ── Clause Card ── */
-.clause-card { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; background: var(--bg); transition: opacity .2s, border-color .15s; overflow: hidden; }
-.clause-card:hover { border-color: var(--border-strong); }
-.clause-card.enabled { border-left: 3px solid var(--accent); }
-.clause-card.disabled { opacity: .45; }
-.clause-header { display: flex; align-items: center; gap: 10px; padding: 11px 14px; }
-.toggle-sw { position: relative; width: 32px; height: 17px; flex-shrink: 0; cursor: pointer; }
-.toggle-sw input { opacity: 0; width: 0; height: 0; }
-.toggle-sl { position: absolute; inset: 0; background: var(--border-strong); border-radius: 17px; transition: background .2s; cursor: pointer; }
-.toggle-sl::before { content: ''; position: absolute; width: 11px; height: 11px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: transform .2s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
-.toggle-sw input:checked + .toggle-sl { background: var(--accent); }
-.toggle-sw input:checked + .toggle-sl::before { transform: translateX(15px); }
-.cl-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-3); min-width: 24px; }
-.cl-title { font-size: 14px; font-weight: 500; flex: 1; color: var(--text); }
-.type-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; letter-spacing: .04em; }
-.tag-num  { background: var(--accent-bg); color: var(--accent); }
-.tag-sel  { background: var(--green-bg); color: var(--green); }
-.tag-combo{ background: var(--amber-bg); color: var(--amber); }
+/* num group — 1 row per item */
+.num-group{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface);}
+.num-row{display:flex;align-items:center;padding:8px 13px;gap:10px;border-bottom:1px solid var(--border);}
+.num-row:last-child{border-bottom:none;}
+.num-row:focus-within{background:var(--blue-bg);}
+.n-lbl{font-size:13px;color:var(--text2);min-width:80px;flex-shrink:0;}
+.n-inp{background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:4px 9px;border-radius:4px;width:88px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;text-align:right;transition:border-color .12s;}
+.n-inp:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-bg);}
+.n-unit{font-size:12px;color:var(--text3);}
 
-.clause-body { padding: 0 14px 14px 46px; display: flex; flex-direction: column; gap: 10px; }
-.clause-body.hidden { display: none; }
+/* options */
+.opt-group{display:flex;flex-direction:column;gap:4px;}
+.opt-item{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:border-color .1s,background .1s;}
+.opt-item:hover{border-color:var(--border2);background:var(--surface2);}
+.opt-item.sel{border-color:var(--text);background:var(--surface2);}
+.rdot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:border-color .1s;}
+.opt-item.sel .rdot{border-color:var(--text);}
+.rdot::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--text);opacity:0;transition:opacity .1s;}
+.opt-item.sel .rdot::after{opacity:1;}
+.o-txt{font-size:13px;color:var(--text);flex:1;line-height:1.5;}
+.o-inputs{margin-top:9px;}
 
-/* ── Num inputs ── */
-.num-group { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); display: flex; flex-direction: column; }
-.num-row { display: flex; align-items: center; padding: 8px 14px; gap: 10px; border-bottom: 1px solid var(--border); transition: background .12s; }
-.num-row:last-child { border-bottom: none; }
-.num-row:focus-within { background: var(--accent-bg); }
-.num-label { font-size: 13px; color: var(--text-2); min-width: 80px; flex-shrink: 0; }
-.num-input { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 4px 10px; border-radius: 4px; width: 90px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; text-align: right; transition: border-color .15s; }
-.num-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-bg); }
-.num-unit { font-size: 12px; color: var(--text-3); }
+/* sub options */
+.sub-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;margin-top:7px;transition:border-color .1s;}
+.sub-opt:hover{border-color:var(--border2);}
+.sub-opt.chk{border-color:var(--text);background:var(--surface2);}
+.chkbox{width:13px;height:13px;border:2px solid var(--border2);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .1s;font-size:9px;color:transparent;}
+.sub-opt.chk .chkbox{border-color:var(--text);background:var(--text);color:#fff;}
+.sub-lbl{font-size:12px;color:var(--text2);}
+.sub-opt.chk .sub-lbl{color:var(--text);}
 
-/* ── Options ── */
-.option-group { display: flex; flex-direction: column; gap: 5px; }
-.option-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: border-color .12s, background .12s; }
-.option-item:hover { background: var(--surface2); border-color: var(--border-strong); }
-.option-item.selected { background: var(--accent-bg); border-color: var(--accent); }
-.radio-dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--border-strong); flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; transition: border-color .12s; }
-.option-item.selected .radio-dot { border-color: var(--accent); }
-.radio-dot::after { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); opacity: 0; transition: opacity .12s; }
-.option-item.selected .radio-dot::after { opacity: 1; }
-.opt-text { font-size: 13px; color: var(--text); flex: 1; line-height: 1.5; }
-.option-item.selected .opt-text { color: var(--text); }
-.opt-inputs { margin-top: 10px; }
+/* divider */
+.divider{height:1px;background:var(--border);margin:24px 0;}
 
-/* ── Sub options ── */
-.sub-opt { display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; margin-top: 8px; transition: border-color .12s, background .12s; }
-.sub-opt:hover { border-color: var(--border-strong); background: var(--surface); }
-.sub-opt.checked { background: var(--accent-bg); border-color: var(--accent); }
-.check-box { width: 14px; height: 14px; border: 2px solid var(--border-strong); border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; transition: all .12s; font-size: 9px; color: transparent; }
-.sub-opt.checked .check-box { border-color: var(--accent); background: var(--accent); color: white; }
-.sub-opt-text { font-size: 12px; color: var(--text-2); }
-.sub-opt.checked .sub-opt-text { color: var(--accent); }
+/* output */
+.out-lbl{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;}
+.btn-row{display:flex;gap:7px;flex-wrap:wrap;}
+.a-btn{padding:6px 14px;border-radius:var(--radius);border:1px solid var(--border2);font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;font-weight:500;transition:all .1s;display:flex;align-items:center;gap:5px;background:var(--bg);color:var(--text2);}
+.a-btn:hover{background:var(--surface2);border-color:var(--text3);color:var(--text);}
+.a-btn.primary{background:var(--text);color:#fff;border-color:var(--text);}
+.a-btn.primary:hover{background:#333;}
+.a-btn.ghost-danger{color:#e03e3e;border-color:#e03e3e;}
+.a-btn.ghost-danger:hover{background:#fdeaea;}
 
-/* ── Divider ── */
-.section-div { height: 1px; background: var(--border); margin: 24px 0; }
+/* modal */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px);}
+.modal-ov.open{display:flex;}
+.modal{background:var(--bg);border:1px solid var(--border);border-radius:8px;width:660px;max-width:95vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.12);}
+.modal-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+.modal-ttl{font-size:15px;font-weight:600;}
+.modal-cls{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 3px;border-radius:3px;transition:background .1s;}
+.modal-cls:hover{background:var(--surface2);color:var(--text);}
+.modal-bd{padding:22px;overflow-y:auto;font-size:14px;line-height:1.9;}
+.modal-bd h2{font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}
+.doc-sub{text-align:center;font-size:12px;color:var(--text3);margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+.doc-cl{margin-bottom:7px;display:flex;gap:10px;}
+.doc-cn{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text3);white-space:nowrap;padding-top:2px;}
 
-/* ── Output ── */
-.out-label { font-size: 11px; font-weight: 600; color: var(--text-3); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 12px; }
-.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
-.action-btn { padding: 7px 16px; border-radius: var(--radius); border: 1px solid var(--border); font-size: 13px; font-family: 'Noto Sans JP', sans-serif; cursor: pointer; font-weight: 500; transition: all .12s; display: flex; align-items: center; gap: 6px; background: var(--bg); color: var(--text-2); }
-.action-btn:hover { background: var(--surface); border-color: var(--border-strong); color: var(--text); }
-.btn-accent { background: var(--accent); color: white; border-color: var(--accent); }
-.btn-accent:hover { background: #1a6fd4; border-color: #1a6fd4; color: white; }
-.btn-danger { color: var(--danger); border-color: var(--danger); }
-.btn-danger:hover { background: var(--danger-bg); color: var(--danger); }
-
-/* ── Modal ── */
-.modal-ov { position: fixed; inset: 0; background: rgba(0,0,0,.3); display: none; align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(2px); }
-.modal-ov.open { display: flex; }
-.modal { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; width: 680px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow-lg); }
-.modal-hd { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
-.modal-ttl { font-size: 15px; font-weight: 600; color: var(--text); }
-.modal-cls { background: none; border: none; color: var(--text-3); font-size: 18px; cursor: pointer; padding: 0 4px; border-radius: 4px; transition: background .12s; }
-.modal-cls:hover { background: var(--surface); color: var(--text); }
-.modal-bd { padding: 24px; overflow-y: auto; font-size: 14px; line-height: 1.9; }
-.modal-bd h2 { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 4px; }
-.doc-sub { text-align: center; font-size: 12px; color: var(--text-3); margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-.doc-cl { margin-bottom: 8px; display: flex; gap: 8px; }
-.doc-cn { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-3); white-space: nowrap; margin-top: 2px; }
-
-@media print {
-  .topbar, .sidebar, .out-sec, .modal-ov { display: none !important; }
-  .app { display: block; }
-  .main { padding: 0; max-width: none; }
-  body { background: white; color: black; }
-}
+@media print{.topbar,.sidebar,.out-sec,.modal-ov{display:none!important;} .app{display:block;} .main{padding:0;max-width:none;}}
 </style>
 </head>
 <body>
-
 <div id="loading"><div class="spin"></div>読み込み中…</div>
 <div id="load-error">⚠ データの読み込みに失敗しました。</div>
 
 <div class="app">
-  <!-- Topbar -->
   <header class="topbar">
-    <span class="topbar-logo">模擬戦 Regulation</span>
-    <span class="topbar-sep">/</span>
-    <span class="topbar-sub">Minecraft Military</span>
-    <div class="topbar-right">
-      <a class="topbar-link" href="admin.html">管理者ページ →</a>
-    </div>
+    <span class="t-logo">模擬戦 Regulation</span>
+    <span class="t-sep">/</span>
+    <span class="t-sub">Minecraft Military</span>
+    <div class="t-right"><a class="t-link" href="admin.html">管理者ページ →</a></div>
   </header>
 
-  <!-- Sidebar -->
   <aside class="sidebar">
-    <div class="sb-section">プリセット</div>
+    <div class="sb-label">プリセット</div>
     <div id="preset-list"></div>
-    <hr class="sb-div">
-    <button class="reset-btn" onclick="applyReset()">↺ 全リセット</button>
-    <hr class="sb-div">
-    <div class="sb-section">凡例</div>
-    <div class="legend-row"><span class="type-tag tag-num">NUM</span><span style="font-size:11px;color:var(--text-3)">数値入力</span></div>
-    <div class="legend-row"><span class="type-tag tag-sel">SELECT</span><span style="font-size:11px;color:var(--text-3)">条文選択</span></div>
-    <div class="legend-row"><span class="type-tag tag-combo">COMBO</span><span style="font-size:11px;color:var(--text-3)">選択＋数値</span></div>
+    <hr class="sb-hr">
+    <button class="sb-reset" onclick="applyReset()">↺ リセット</button>
   </aside>
 
-  <!-- Main -->
   <main class="main">
-    <div class="page-title">レギュレーション作成フォーム</div>
-    <div class="page-meta">条文を有効にして数値・選択肢を設定し、PDF または Word で出力できます。</div>
+    <div class="page-h">レギュレーション作成</div>
+    <div class="page-sub">条文を有効にして設定し、PDF または Word で出力します。</div>
     <div id="clauses-container"></div>
-
-    <div class="section-div"></div>
-
+    <div class="divider"></div>
     <div class="out-sec">
-      <div class="out-label">出力</div>
+      <div class="out-lbl">出力</div>
       <div class="btn-row">
-        <button class="action-btn btn-accent" onclick="openPreview()">👁 プレビュー</button>
-        <button class="action-btn btn-danger" onclick="printPDF()">📄 PDF で保存</button>
-        <button class="action-btn" onclick="downloadWord()">📝 Word で保存</button>
+        <button class="a-btn primary" onclick="openPreview()">👁 プレビュー</button>
+        <button class="a-btn ghost-danger" onclick="printPDF()">📄 PDF</button>
+        <button class="a-btn" onclick="downloadWord()">📝 Word</button>
       </div>
     </div>
   </main>
 </div>
 
-<!-- Preview Modal -->
 <div class="modal-ov" id="modal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
     <div class="modal-hd">
@@ -256,222 +199,170 @@ body { background: var(--bg); color: var(--text); font-family: 'Noto Sans JP', '
 </div>
 
 <script>
-// ── State ────────────────────────────────────────────────────────────────────
-let state = {};
-function initState() {
-  state = {};
-  (window._CLAUSES||[]).forEach(c => {
-    state[c.id] = { enabled: c.defaultEnabled ?? true };
-    if (c.type === 'num') {
-      state[c.id].inputs = {};
-      (c.inputs||[]).forEach(i => { state[c.id].inputs[i.id] = i.default ?? 0; });
-    } else {
-      state[c.id].selectedOption = (c.options||[])[0]?.id ?? null;
-      (c.options||[]).forEach(opt => {
-        if (opt.inputs) { state[c.id][opt.id] = {}; opt.inputs.forEach(i => { state[c.id][opt.id][i.id] = i.default ?? 0; }); }
-        (opt.subOptions||[]).forEach(sub => {
-          state[c.id][sub.id] = { checked: sub.defaultChecked ?? false, inputs: {} };
-          (sub.inputs||[]).forEach(i => { state[c.id][sub.id].inputs[i.id] = i.default ?? 0; });
+let state={};
+function initState(){
+  state={};
+  (window._CLAUSES||[]).forEach(c=>{
+    state[c.id]={enabled:c.defaultEnabled??true};
+    if(c.type==='num'){state[c.id].inputs={};(c.inputs||[]).forEach(i=>{state[c.id].inputs[i.id]=i.default??0;});}
+    else{
+      state[c.id].selectedOption=(c.options||[])[0]?.id??null;
+      (c.options||[]).forEach(opt=>{
+        if(opt.inputs){state[c.id][opt.id]={};opt.inputs.forEach(i=>{state[c.id][opt.id][i.id]=i.default??0;});}
+        (opt.subOptions||[]).forEach(sub=>{
+          state[c.id][sub.id]={checked:sub.defaultChecked??false,inputs:{}};
+          (sub.inputs||[]).forEach(i=>{state[c.id][sub.id].inputs[i.id]=i.default??0;});
         });
       });
     }
   });
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-function renderSidebar() {
-  const list = document.getElementById('preset-list');
-  list.innerHTML = '';
-  (window._PRESETS||[]).forEach(p => {
-    const btn = document.createElement('button');
-    btn.className = 'preset-btn'; btn.id = 'pb-'+p.id;
-    btn.innerHTML = p.name + (p.description ? `<span class="pd">${p.description}</span>` : '');
-    btn.onclick = () => applyPreset(p);
+function renderSidebar(){
+  const list=document.getElementById('preset-list');
+  list.innerHTML='';
+  (window._PRESETS||[]).forEach(p=>{
+    const btn=document.createElement('button');
+    btn.className='p-btn';btn.id='pb-'+p.id;
+    btn.innerHTML=p.name+(p.description?`<span class="pd">${p.description}</span>`:'');
+    btn.onclick=()=>applyPreset(p);
     list.appendChild(btn);
   });
 }
 
-function applyPreset(preset) {
-  (window._CLAUSES||[]).forEach(c => {
-    const ps = preset.config?.[c.id]; if (!ps) return;
-    if (ps.enabled !== undefined) state[c.id].enabled = ps.enabled;
-    if (ps.selectedOption) state[c.id].selectedOption = ps.selectedOption;
-    if (ps.inputs) Object.assign(state[c.id].inputs||{}, ps.inputs);
-    (c.options||[]).forEach(opt => {
-      if (ps[opt.id]) { state[c.id][opt.id] = state[c.id][opt.id]||{}; Object.assign(state[c.id][opt.id], ps[opt.id]); }
-      (opt.subOptions||[]).forEach(sub => {
-        if (ps[sub.id]) {
-          state[c.id][sub.id] = state[c.id][sub.id]||{checked:false,inputs:{}};
-          if (ps[sub.id].checked !== undefined) state[c.id][sub.id].checked = ps[sub.id].checked;
-          if (ps[sub.id].inputs) Object.assign(state[c.id][sub.id].inputs, ps[sub.id].inputs);
+function applyPreset(p){
+  (window._CLAUSES||[]).forEach(c=>{
+    const ps=p.config?.[c.id];if(!ps)return;
+    if(ps.enabled!==undefined)state[c.id].enabled=ps.enabled;
+    if(ps.selectedOption)state[c.id].selectedOption=ps.selectedOption;
+    if(ps.inputs)Object.assign(state[c.id].inputs||{},ps.inputs);
+    (c.options||[]).forEach(opt=>{
+      if(ps[opt.id]){state[c.id][opt.id]=state[c.id][opt.id]||{};Object.assign(state[c.id][opt.id],ps[opt.id]);}
+      (opt.subOptions||[]).forEach(sub=>{
+        if(ps[sub.id]){
+          state[c.id][sub.id]=state[c.id][sub.id]||{checked:false,inputs:{}};
+          if(ps[sub.id].checked!==undefined)state[c.id][sub.id].checked=ps[sub.id].checked;
+          if(ps[sub.id].inputs)Object.assign(state[c.id][sub.id].inputs,ps[sub.id].inputs);
         }
       });
     });
   });
-  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById('pb-'+preset.id)?.classList.add('active');
+  document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('pb-'+p.id)?.classList.add('active');
   renderAll();
 }
 
-function applyReset() {
-  initState();
-  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-  renderAll();
-}
+function applyReset(){initState();document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('active'));renderAll();}
 
-// ── Render ────────────────────────────────────────────────────────────────────
-function renderAll() {
-  const container = document.getElementById('clauses-container');
-  container.innerHTML = '';
-  (window._CLAUSES||[]).forEach((c,i) => {
-    const s = state[c.id];
-    const tagClass = c.type==='num'?'tag-num':c.type==='select'?'tag-sel':'tag-combo';
-    const tagLabel = c.type==='num'?'NUM':c.type==='select'?'SELECT':'COMBO';
-    const card = document.createElement('div');
-    card.className = 'clause-card'+(s.enabled?' enabled':' disabled');
-    card.id = 'card-'+c.id;
-    card.innerHTML = `
-      <div class="clause-header">
-        <label class="toggle-sw">
-          <input type="checkbox" ${s.enabled?'checked':''} onchange="setEnabled('${c.id}',this.checked)">
-          <span class="toggle-sl"></span>
-        </label>
-        <span class="cl-num">${String(i+1).padStart(2,'0')}</span>
-        <span class="cl-title">${c.title}</span>
-        <span class="type-tag ${tagClass}">${tagLabel}</span>
+function renderAll(){
+  const con=document.getElementById('clauses-container');con.innerHTML='';
+  (window._CLAUSES||[]).forEach((c,i)=>{
+    const s=state[c.id];
+    const card=document.createElement('div');
+    card.className='c-card '+(s.enabled?'on':'off');card.id='card-'+c.id;
+    card.innerHTML=`
+      <div class="c-hd">
+        <label class="tog"><input type="checkbox" ${s.enabled?'checked':''} onchange="setEnabled('${c.id}',this.checked)"><span class="tog-sl"></span></label>
+        <span class="c-num">${String(i+1).padStart(2,'0')}</span>
+        <span class="c-ttl">${c.title}</span>
       </div>
-      <div class="clause-body${s.enabled?'':' hidden'}" id="body-${c.id}">${renderBody(c)}</div>`;
-    container.appendChild(card);
+      <div class="c-body${s.enabled?'':' hide'}" id="body-${c.id}">${renderBody(c)}</div>`;
+    con.appendChild(card);
   });
 }
 
-function renderBody(c) {
-  const s = state[c.id];
-  if (c.type === 'num') {
+function renderBody(c){
+  const s=state[c.id];
+  if(c.type==='num'){
     return `<div class="num-group">${(c.inputs||[]).map(inp=>`
       <div class="num-row">
-        <span class="num-label">${inp.label}</span>
-        <input class="num-input" type="number" min="1" value="${s.inputs?.[inp.id]??inp.default}"
-          oninput="setNumInput('${c.id}',null,'${inp.id}',this.value)">
-        ${inp.unit?`<span class="num-unit">${inp.unit}</span>`:''}
+        <span class="n-lbl">${inp.label}</span>
+        <input class="n-inp" type="number" min="1" value="${s.inputs?.[inp.id]??inp.default}" oninput="setNum('${c.id}',null,'${inp.id}',this.value)">
+        ${inp.unit?`<span class="n-unit">${inp.unit}</span>`:''}
       </div>`).join('')}</div>`;
   }
-  return `<div class="option-group">${(c.options||[]).map(opt=>renderOption(c,opt)).join('')}</div>`;
+  return `<div class="opt-group">${(c.options||[]).map(opt=>renderOpt(c,opt)).join('')}</div>`;
 }
 
-function renderOption(c, opt) {
-  const s = state[c.id];
-  const sel = s.selectedOption === opt.id;
-  let html = `<div class="option-item${sel?' selected':''}" id="opt-${c.id}-${opt.id}" onclick="selectOption('${c.id}','${opt.id}')">
-    <span class="radio-dot"></span><div style="flex:1"><span class="opt-text">${opt.label}</span>`;
-  if (opt.inputs?.length && sel) {
-    html += `<div class="opt-inputs"><div class="num-group">${opt.inputs.map(inp=>`
+function renderOpt(c,opt){
+  const s=state[c.id];const sel=s.selectedOption===opt.id;
+  let h=`<div class="opt-item${sel?' sel':''}" onclick="selOpt('${c.id}','${opt.id}')">
+    <span class="rdot"></span><div style="flex:1"><span class="o-txt">${opt.label}</span>`;
+  if(opt.inputs?.length&&sel){
+    h+=`<div class="o-inputs"><div class="num-group">${opt.inputs.map(inp=>`
       <div class="num-row">
-        <span class="num-label">${inp.label}</span>
-        <input class="num-input" type="number" min="1" value="${(s[opt.id]||{})[inp.id]??inp.default}"
-          oninput="setNumInput('${c.id}','${opt.id}','${inp.id}',this.value)" onclick="event.stopPropagation()">
-        ${inp.unit?`<span class="num-unit">${inp.unit}</span>`:''}
+        <span class="n-lbl">${inp.label}</span>
+        <input class="n-inp" type="number" min="1" value="${(s[opt.id]||{})[inp.id]??inp.default}"
+          oninput="setNum('${c.id}','${opt.id}','${inp.id}',this.value)" onclick="event.stopPropagation()">
+        ${inp.unit?`<span class="n-unit">${inp.unit}</span>`:''}
       </div>`).join('')}</div></div>`;
   }
-  if (opt.subOptions?.length && sel) {
-    opt.subOptions.forEach(sub => {
-      const ss = s[sub.id]||{checked:false,inputs:{}};
-      html += `<div class="sub-opt${ss.checked?' checked':''}" onclick="toggleSub('${c.id}','${sub.id}',event)">
-        <span class="check-box">✓</span><span class="sub-opt-text">${sub.label}</span></div>`;
-      if (ss.checked && sub.inputs?.length) {
-        html += `<div class="opt-inputs"><div class="num-group">${sub.inputs.map(si=>`
+  if(opt.subOptions?.length&&sel){
+    opt.subOptions.forEach(sub=>{
+      const ss=s[sub.id]||{checked:false,inputs:{}};
+      h+=`<div class="sub-opt${ss.checked?' chk':''}" onclick="togSub('${c.id}','${sub.id}',event)">
+        <span class="chkbox">✓</span><span class="sub-lbl">${sub.label}</span></div>`;
+      if(ss.checked&&sub.inputs?.length){
+        h+=`<div class="o-inputs"><div class="num-group">${sub.inputs.map(si=>`
           <div class="num-row">
-            <span class="num-label">${si.label}</span>
-            <input class="num-input" type="number" min="1" value="${ss.inputs?.[si.id]??si.default}"
-              oninput="setSubInput('${c.id}','${sub.id}','${si.id}',this.value)" onclick="event.stopPropagation()">
-            ${si.unit?`<span class="num-unit">${si.unit}</span>`:''}
+            <span class="n-lbl">${si.label}</span>
+            <input class="n-inp" type="number" min="1" value="${ss.inputs?.[si.id]??si.default}"
+              oninput="setSubNum('${c.id}','${sub.id}','${si.id}',this.value)" onclick="event.stopPropagation()">
+            ${si.unit?`<span class="n-unit">${si.unit}</span>`:''}
           </div>`).join('')}</div></div>`;
       }
     });
   }
-  html += `</div></div>`;
-  return html;
+  h+=`</div></div>`;return h;
 }
 
-// ── Mutators ──────────────────────────────────────────────────────────────────
-function setEnabled(id, val) {
-  state[id].enabled = val;
-  document.getElementById('card-'+id).className = 'clause-card'+(val?' enabled':' disabled');
-  document.getElementById('body-'+id).className = 'clause-body'+(val?'':' hidden');
+function setEnabled(id,val){
+  state[id].enabled=val;
+  document.getElementById('card-'+id).className='c-card '+(val?'on':'off');
+  document.getElementById('body-'+id).className='c-body'+(val?'':' hide');
 }
-function selectOption(cid, oid) {
-  state[cid].selectedOption = oid;
-  document.getElementById('body-'+cid).innerHTML = renderBody(window._CLAUSES.find(x=>x.id===cid));
-}
-function setNumInput(cid, oid, iid, val) {
-  const v = parseFloat(val)||0;
-  if (oid) { state[cid][oid]=state[cid][oid]||{}; state[cid][oid][iid]=v; }
-  else { state[cid].inputs[iid]=v; }
-}
-function toggleSub(cid, sid, e) {
-  e.stopPropagation();
-  state[cid][sid]=state[cid][sid]||{checked:false,inputs:{}};
-  state[cid][sid].checked=!state[cid][sid].checked;
-  document.getElementById('body-'+cid).innerHTML=renderBody(window._CLAUSES.find(x=>x.id===cid));
-}
-function setSubInput(cid, sid, iid, val) { state[cid][sid].inputs[iid]=parseFloat(val)||0; }
+function selOpt(cid,oid){state[cid].selectedOption=oid;document.getElementById('body-'+cid).innerHTML=renderBody(window._CLAUSES.find(x=>x.id===cid));}
+function setNum(cid,oid,iid,val){const v=parseFloat(val)||0;if(oid){state[cid][oid]=state[cid][oid]||{};state[cid][oid][iid]=v;}else{state[cid].inputs[iid]=v;}}
+function togSub(cid,sid,e){e.stopPropagation();state[cid][sid]=state[cid][sid]||{checked:false,inputs:{}};state[cid][sid].checked=!state[cid][sid].checked;document.getElementById('body-'+cid).innerHTML=renderBody(window._CLAUSES.find(x=>x.id===cid));}
+function setSubNum(cid,sid,iid,val){state[cid][sid].inputs[iid]=parseFloat(val)||0;}
 
-// ── Text generation ───────────────────────────────────────────────────────────
-function interpolate(tmpl, vals) {
-  if (!tmpl) return '';
-  return tmpl.replace(/\{\{(\w+)\}\}/g, (_,k) => vals?.[k]??'?');
+function ipl(tmpl,vals){if(!tmpl)return'';return tmpl.replace(/\{\{(\w+)\}\}/g,(_,k)=>vals?.[k]??'?');}
+function buildText(c){
+  const s=state[c.id];if(!s.enabled)return null;
+  try{
+    if(c.type==='num')return ipl(c.textTemplate,s.inputs);
+    const opt=(c.options||[]).find(o=>o.id===s.selectedOption);if(!opt)return null;
+    let t=ipl(opt.textTemplate,s[opt.id]||{});
+    (opt.subOptions||[]).forEach(sub=>{const ss=s[sub.id];if(ss?.checked)t+=ipl(sub.textTemplate,ss.inputs||{});});
+    return t;
+  }catch{return'（テキスト生成エラー）';}
 }
-function buildClauseText(c) {
-  const s = state[c.id];
-  if (!s.enabled) return null;
-  try {
-    if (c.type==='num') return interpolate(c.textTemplate, s.inputs);
-    const opt = (c.options||[]).find(o=>o.id===s.selectedOption);
-    if (!opt) return null;
-    let text = interpolate(opt.textTemplate, s[opt.id]||{});
-    (opt.subOptions||[]).forEach(sub => { const ss=s[sub.id]; if(ss?.checked) text+=interpolate(sub.textTemplate, ss.inputs||{}); });
-    return text;
-  } catch(e) { return '（テキスト生成エラー）'; }
-}
-function generateAll() {
-  const lines=[]; let n=1;
-  (window._CLAUSES||[]).forEach(c => { const t=buildClauseText(c); if(t){lines.push({num:n,text:t});n++;} });
-  return lines;
-}
+function genAll(){const lines=[];let n=1;(window._CLAUSES||[]).forEach(c=>{const t=buildText(c);if(t){lines.push({num:n,text:t});n++;}});return lines;}
 
-// ── Preview ───────────────────────────────────────────────────────────────────
-function openPreview() {
-  const lines = generateAll();
-  const now = new Date().toLocaleDateString('ja-JP');
-  let html = `<h2>模擬戦 レギュレーション</h2><div class="doc-sub">作成日: ${now}　／　Minecraft Military</div>`;
-  lines.forEach(l => { html += `<div class="doc-cl"><span class="doc-cn">第${l.num}条</span>${l.text}</div>`; });
-  if (!lines.length) html += '<p style="color:var(--text-3);text-align:center;padding:24px">有効な条文がありません。</p>';
-  document.getElementById('preview-content').innerHTML = html;
+function openPreview(){
+  const lines=genAll();const now=new Date().toLocaleDateString('ja-JP');
+  let h=`<h2>模擬戦 レギュレーション</h2><div class="doc-sub">作成日: ${now}　／　Minecraft Military</div>`;
+  lines.forEach(l=>{h+=`<div class="doc-cl"><span class="doc-cn">第${l.num}条</span>${l.text}</div>`;});
+  if(!lines.length)h+='<p style="color:var(--text3);text-align:center;padding:24px">有効な条文がありません。</p>';
+  document.getElementById('preview-content').innerHTML=h;
   document.getElementById('modal').classList.add('open');
 }
-function printPDF() { openPreview(); setTimeout(() => window.print(), 400); }
+function printPDF(){openPreview();setTimeout(()=>window.print(),400);}
 
-// ── Word ──────────────────────────────────────────────────────────────────────
-async function downloadWord() {
-  const { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Packer } = docx;
-  const lines = generateAll();
-  const now = new Date().toLocaleDateString('ja-JP');
-  const children = [
-    new Paragraph({ text:'模擬戦 レギュレーション', heading:HeadingLevel.HEADING_1, alignment:AlignmentType.CENTER }),
-    new Paragraph({ children:[new TextRun({text:`作成日: ${now}　／　Minecraft Military`,size:20,color:'888888'})], alignment:AlignmentType.CENTER }),
-    new Paragraph({ text:'' }),
-    ...lines.map(l => new Paragraph({
-      children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],
-      spacing:{after:160}
-    }))
+async function downloadWord(){
+  const{Document,Paragraph,TextRun,HeadingLevel,AlignmentType,Packer}=docx;
+  const lines=genAll();const now=new Date().toLocaleDateString('ja-JP');
+  const children=[
+    new Paragraph({text:'模擬戦 レギュレーション',heading:HeadingLevel.HEADING_1,alignment:AlignmentType.CENTER}),
+    new Paragraph({children:[new TextRun({text:`作成日: ${now}　／　Minecraft Military`,size:20,color:'888888'})],alignment:AlignmentType.CENTER}),
+    new Paragraph({text:''}),
+    ...lines.map(l=>new Paragraph({children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}))
   ];
-  const doc = new Document({ sections:[{children}] });
-  const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href=url; a.download='模擬戦_レギュレーション.docx';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const doc=new Document({sections:[{children}]});
+  const blob=await Packer.toBlob(doc);
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='模擬戦_レギュレーション.docx';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 </script>
 </body>
