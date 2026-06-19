@@ -131,7 +131,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',s
 .btn-row{display:flex;gap:7px;flex-wrap:wrap;}
 .a-btn{padding:6px 14px;border-radius:var(--radius);border:1px solid var(--border2);font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;font-weight:500;transition:all .1s;display:flex;align-items:center;gap:5px;background:var(--bg);color:var(--text2);}
 .a-btn:hover{background:var(--surface2);border-color:var(--text3);color:var(--text);}
-.a-btn.primary{background:var(--text);color:#fff;border-color:var(--text);}
+.a-btn.primary{background:var(--text);color:#fff;border-color:#1057c2;}
 .a-btn.primary:hover{background:#333;}
 .a-btn.ghost-danger{color:#e03e3e;border-color:#e03e3e;}
 .a-btn.ghost-danger:hover{background:#fdeaea;}
@@ -342,7 +342,7 @@ function genAll(){const lines=[];let n=1;(window._CLAUSES||[]).forEach(c=>{const
 function openPreview(){
   const lines=genAll();const now=new Date().toLocaleDateString('ja-JP');
   let h=`<h2>模擬戦 レギュレーション</h2><div class="doc-sub">作成日: ${now}　／　Minecraft Military</div>`;
-  lines.forEach(l=>{h+=`<div class="doc-cl"><span class="doc-cn">第${l.num}条</span>${l.text}</div>`;});
+  lines.forEach(l=>{h+=`<div class="doc-cl"><span class="doc-cn">${l.num}.</span>${l.text}</div>`;});
   if(!lines.length)h+='<p style="color:var(--text3);text-align:center;padding:24px">有効な条文がありません。</p>';
   document.getElementById('preview-content').innerHTML=h;
   document.getElementById('modal').classList.add('open');
@@ -356,12 +356,12 @@ async function downloadWord(){
     new Paragraph({text:'模擬戦 レギュレーション',heading:HeadingLevel.HEADING_1,alignment:AlignmentType.CENTER}),
     new Paragraph({children:[new TextRun({text:`作成日: ${now}　／　Minecraft Military`,size:20,color:'888888'})],alignment:AlignmentType.CENTER}),
     new Paragraph({text:''}),
-    ...lines.map(l=>new Paragraph({children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}))
+    ...lines.map(l=>new Paragraph({children:[new TextRun({text:`${l.num}.　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}))
   ];
   const doc=new Document({sections:[{children}]});
   const blob=await Packer.toBlob(doc);
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='模擬戦_レギュレーション.docx';
+  const a=document.createElement('a');a.href=url;a.download='ragulation.docx';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 </script>
