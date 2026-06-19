@@ -32,15 +32,36 @@
   };
   window.logout = async () => { await signOut(auth); };
 
-  onAuthStateChanged(auth, user => {
-    document.getElementById('login-screen').style.display = user ? 'none' : 'flex';
-    document.getElementById('admin-screen').style.display = user ? 'block' : 'none';
-    if (user) {
-      document.getElementById('user-name').textContent = user.displayName || user.email;
-      document.getElementById('user-avatar').src = user.photoURL || '';
-      loadAll();
+ onAuthStateChanged(auth, async user => {
+  if (!user) {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('admin-screen').style.display = 'none';
+    return;
+  }
+
+  // Firestoreで管理者チェック
+  try {
+    const adminDoc = await getDoc(doc(db, 'admins', user.email));
+    const isAdmin = adminDoc.exists() && adminDoc.data().role === 'admin';
+
+    document.getElementById('login-screen').style.display = isAdmin ? 'none' : 'flex';
+    document.getElementById('admin-screen').style.display = isAdmin ? 'block' : 'none';
+
+    if (!isAdmin) {
+      await signOut(auth);
+      alert('このアカウントは管理者権限がありません。');
+      return;
     }
-  });
+
+    document.getElementById('user-name').textContent = user.displayName || user.email;
+    document.getElementById('user-avatar').src = user.photoURL || '';
+    loadAll();
+
+  } catch(e) {
+    alert('権限の確認に失敗しました: ' + e.message);
+    await signOut(auth);
+  }
+});
 
   // ── Load ──────────────────────────────────────────────────────────────────
   async function loadAll() {
