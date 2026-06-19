@@ -464,24 +464,73 @@ function printPDF() { openPreview(); setTimeout(() => window.print(), 400); }
 // ── Word ──────────────────────────────────────────────────────────────────────
 async function downloadWord() {
   const { Document, Paragraph, TextRun, HeadingLevel, AlignmentType, Packer } = docx;
+
   const lines = generateAll();
   const now = new Date().toLocaleDateString('ja-JP');
+
   const children = [
-    new Paragraph({ text:'模擬戦 レギュレーション', heading:HeadingLevel.HEADING_1, alignment:AlignmentType.CENTER }),
-    new Paragraph({ children:[new TextRun({text:`作成日: ${now}　／　Minecraft Military`,size:20,color:'888888'})], alignment:AlignmentType.CENTER }),
-    new Paragraph({ text:'' }),
-    ...lines.map(l => new Paragraph({
-      children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],
-      spacing:{after:160}
-    }))
+    new Paragraph({
+      text: '模擬戦 レギュレーション',
+      heading: HeadingLevel.HEADING_1,
+      alignment: AlignmentType.CENTER
+    }),
+
+    new Paragraph({
+      children: [
+        new TextRun({
+          text: `作成日: ${now} ／ Minecraft Military`,
+          size: 20,
+          color: '888888'
+        })
+      ],
+      alignment: AlignmentType.CENTER
+    }),
+
+    new Paragraph({ text: '' }),
+
+    ...lines.map(l =>
+      new Paragraph({
+        children: [
+          new TextRun({
+            text: `第${l.num}条　`,
+            bold: true,
+            size: 24
+          }),
+          new TextRun({
+            text: l.text,
+            size: 24
+          })
+        ],
+        spacing: {
+          after: 160
+        }
+      })
+    )
   ];
-  const doc = new Document({ sections:[{ children }] });
+
+  const doc = new Document({
+    sections: [
+      {
+        children
+      }
+    ]
+  });
+
   const blob = await Packer.toBlob(doc);
+
   const url = URL.createObjectURL(blob);
+
   const a = document.createElement('a');
-  a.href = url; a.download = '模擬戦_レギュレーション.docx'; a.click();
+  a.href = url;
+  a.download = '模擬戦_レギュレーション.docx';
+
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+
   URL.revokeObjectURL(url);
 }
+  
 </script>
 </body>
 </html>
