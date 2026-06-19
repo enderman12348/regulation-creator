@@ -6,151 +6,150 @@
 <title>模擬戦 レギュレーション作成フォーム</title>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  const cfg = {
-    apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",
-    authDomain:"regulation-creation-tool.firebaseapp.com",
-    projectId:"regulation-creation-tool",
-    storageBucket:"regulation-creation-tool.firebasestorage.app",
-    messagingSenderId:"743315732081",
-    appId:"1:743315732081:web:a2e78a376b403b15e80dd0"
-  };
-  const db = getFirestore(initializeApp(cfg));
-  window.addEventListener('DOMContentLoaded', async () => {
-    try {
-      const [cSnap, pSnap] = await Promise.all([getDocs(collection(db,'clauses')), getDocs(collection(db,'presets'))]);
-      const clauses=[]; cSnap.forEach(d=>clauses.push({id:d.id,...d.data()})); clauses.sort((a,b)=>(a.order??0)-(b.order??0));
-      const presets=[]; pSnap.forEach(d=>presets.push({id:d.id,...d.data()}));
-      window._CLAUSES=clauses; window._PRESETS=presets;
-      initState(); renderSidebar(); renderAll();
-    } catch(e) { document.getElementById('load-error').style.display='flex'; console.error(e); }
+  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import{getFirestore,collection,getDocs}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  const db=getFirestore(initializeApp({apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"}));
+  window.addEventListener('DOMContentLoaded',async()=>{
+    try{
+      const[cs,ps]=await Promise.all([getDocs(collection(db,'clauses')),getDocs(collection(db,'presets'))]);
+      const cl=[];cs.forEach(d=>cl.push({id:d.id,...d.data()}));cl.sort((a,b)=>(a.order??0)-(b.order??0));
+      const pr=[];ps.forEach(d=>pr.push({id:d.id,...d.data()}));
+      window._CL=cl;window._PR=pr;
+      initState();renderSidebar();renderAll();
+    }catch(e){document.getElementById('load-error').style.display='flex';console.error(e);}
     document.getElementById('loading').style.display='none';
   });
 </script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;600&display=swap');
-:root {
-  --bg:#ffffff; --surface:#f9f9f8; --surface2:#f1f0ef; --border:#e8e7e5;
-  --border2:#d3d2cf; --text:#191919; --text2:#6f6f6f; --text3:#aaa9a6;
-  --blue:#2383e2; --blue-bg:#edf4fd; --radius:5px;
-  --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 6px rgba(0,0,0,.04);
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap');
+
+/* ── 4-tone palette ──────────────────────────────────────────────────────── */
+:root{
+  --black:#1a1a1a;   /* 黒：テキスト、ON状態 */
+  --dark:#555555;    /* 濃グレー：サブテキスト、ボーダー強 */
+  --mid:#cccccc;     /* 薄グレー：ボーダー、背景アクセント */
+  --white:#ffffff;   /* 白：背景 */
+
+  /* アクセント（赤のみ危険操作に使用） */
+  --err:#c0392b;
+
+  --r:4px;
 }
+
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
+body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
 
 /* loading */
-#loading{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--text3);font-size:13px;}
-#load-error{display:none;position:fixed;inset:0;background:var(--bg);z-index:300;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#e03e3e;font-size:13px;}
-.spin{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--text2);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+#loading{position:fixed;inset:0;background:var(--white);z-index:300;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--dark);font-size:13px;}
+#load-error{display:none;position:fixed;inset:0;background:var(--white);z-index:300;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--err);font-size:13px;}
+.spin{width:16px;height:16px;border:2px solid var(--mid);border-top-color:var(--dark);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* layout */
-.app{display:grid;grid-template-columns:200px 1fr;grid-template-rows:44px 1fr;min-height:100vh;}
+.app{display:grid;grid-template-columns:196px 1fr;grid-template-rows:44px 1fr;min-height:100vh;}
 
 /* topbar */
-.topbar{grid-column:1/-1;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:8px;background:var(--bg);position:sticky;top:0;z-index:50;}
-.t-logo{font-size:13px;font-weight:600;color:var(--text);letter-spacing:-.01em;}
-.t-sep{color:var(--border2);font-size:12px;}
-.t-sub{font-size:12px;color:var(--text3);}
+.topbar{grid-column:1/-1;border-bottom:1px solid var(--mid);display:flex;align-items:center;padding:0 18px;gap:8px;background:var(--white);position:sticky;top:0;z-index:50;}
+.t-logo{font-size:13px;font-weight:700;color:var(--black);}
+.t-sep{color:var(--mid);font-size:12px;}
+.t-sub{font-size:12px;color:var(--dark);}
 .t-right{margin-left:auto;}
-.t-link{font-size:12px;color:var(--text2);text-decoration:none;padding:3px 9px;border-radius:var(--radius);transition:background .12s;}
-.t-link:hover{background:var(--surface2);}
+.t-link{font-size:12px;color:var(--dark);text-decoration:none;padding:3px 9px;border-radius:var(--r);border:1px solid var(--mid);transition:background .1s;}
+.t-link:hover{background:var(--mid);color:var(--black);}
 
 /* sidebar */
-.sidebar{border-right:1px solid var(--border);padding:12px 8px;display:flex;flex-direction:column;gap:1px;background:var(--surface);overflow-y:auto;}
-.sb-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;padding:6px 8px 3px;margin-top:6px;}
-.sb-label:first-child{margin-top:0;}
-.p-btn{width:100%;background:none;border:none;color:var(--text2);padding:4px 8px;border-radius:var(--radius);cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:13px;text-align:left;transition:background .1s,color .1s;display:flex;flex-direction:column;gap:0;}
-.p-btn:hover{background:var(--surface2);color:var(--text);}
-.p-btn.active{background:#e8f0fa;color:var(--blue);}
-.p-btn .pd{font-size:11px;color:var(--text3);}
-.p-btn.active .pd{color:#93b8e8;}
-.sb-hr{border:none;border-top:1px solid var(--border);margin:6px 8px;}
-.sb-reset{width:100%;background:none;border:none;color:var(--text3);padding:4px 8px;border-radius:var(--radius);cursor:pointer;font-size:12px;text-align:left;transition:background .1s,color .1s;font-family:'Noto Sans JP',sans-serif;}
-.sb-reset:hover{background:#fdeaea;color:#e03e3e;}
+.sidebar{border-right:1px solid var(--mid);padding:12px 8px;display:flex;flex-direction:column;gap:1px;background:var(--white);overflow-y:auto;}
+.sb-lbl{font-size:10px;font-weight:700;color:var(--dark);letter-spacing:.08em;text-transform:uppercase;padding:8px 8px 3px;border-top:1px solid var(--mid);margin-top:6px;}
+.sb-lbl:first-child{border-top:none;margin-top:0;padding-top:4px;}
+.p-btn{width:100%;background:none;border:none;color:var(--dark);padding:5px 8px;border-radius:var(--r);cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:13px;text-align:left;transition:background .1s,color .1s;display:flex;flex-direction:column;}
+.p-btn:hover{background:var(--mid);color:var(--black);}
+.p-btn.active{background:var(--black);color:var(--white);}
+.p-btn .pd{font-size:11px;opacity:.7;}
+.sb-hr{border:none;border-top:1px solid var(--mid);margin:6px 8px;}
+.sb-reset{width:100%;background:none;border:none;color:var(--dark);padding:5px 8px;border-radius:var(--r);cursor:pointer;font-size:12px;text-align:left;transition:background .1s;font-family:'Noto Sans JP',sans-serif;}
+.sb-reset:hover{background:var(--mid);}
 
 /* main */
-.main{padding:32px 40px;overflow-y:auto;max-width:800px;}
-.page-h{font-size:22px;font-weight:700;margin-bottom:3px;letter-spacing:-.02em;}
-.page-sub{font-size:13px;color:var(--text3);margin-bottom:28px;}
+.main{padding:32px 40px;overflow-y:auto;max-width:780px;}
+.page-h{font-size:21px;font-weight:700;margin-bottom:3px;letter-spacing:-.02em;}
+.page-sub{font-size:13px;color:var(--dark);margin-bottom:26px;}
 
 /* clause card */
-.c-card{border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:6px;background:var(--bg);transition:opacity .2s,border-color .12s;}
-.c-card:hover{border-color:var(--text2);}
-.c-card.on{}
-.c-card.off{opacity:.4;}
-.c-hd{display:flex;align-items:center;gap:9px;padding:10px 13px;}
+.c-card{border:1px solid var(--mid);border-radius:var(--r);margin-bottom:5px;background:var(--white);transition:opacity .2s;}
+.c-card.on{border-left:3px solid var(--black);}
+.c-card.off{opacity:.38;}
+.c-hd{display:flex;align-items:center;gap:9px;padding:10px 12px;}
 .tog{position:relative;width:30px;height:16px;flex-shrink:0;cursor:pointer;}
 .tog input{opacity:0;width:0;height:0;}
-.tog-sl{position:absolute;inset:0;background:var(--border2);border-radius:16px;transition:background .18s;}
-.tog-sl::before{content:'';position:absolute;width:10px;height:10px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .18s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
-.tog input:checked+.tog-sl{background:var(--text2);}
+.tog-sl{position:absolute;inset:0;background:var(--mid);border-radius:16px;transition:background .15s;}
+.tog-sl::before{content:'';position:absolute;width:10px;height:10px;left:3px;top:3px;background:var(--white);border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25);}
+.tog input:checked+.tog-sl{background:var(--black);}
 .tog input:checked+.tog-sl::before{transform:translateX(14px);}
-.c-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--border2);min-width:22px;}
+.c-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dark);min-width:22px;}
 .c-ttl{font-size:14px;font-weight:500;flex:1;}
-.c-body{padding:0 13px 13px 42px;display:flex;flex-direction:column;gap:9px;}
+.c-body{padding:0 12px 12px 42px;display:flex;flex-direction:column;gap:8px;}
 .c-body.hide{display:none;}
 
-/* num group — 1 row per item */
-.num-group{border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;background:var(--bg);}
-.num-row{display:flex;align-items:center;padding:8px 13px;gap:10px;border-bottom:1px solid var(--border);}
+/* num group */
+.num-group{border:1px solid var(--mid);border-radius:var(--r);overflow:hidden;}
+.num-row{display:flex;align-items:center;padding:8px 12px;gap:10px;border-bottom:1px solid var(--mid);background:var(--white);}
 .num-row:last-child{border-bottom:none;}
-.num-row:focus-within{background:var(--blue-bg);}
-.n-lbl{font-size:13px;color:var(--text2);min-width:80px;flex-shrink:0;}
-.n-inp{background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:4px 9px;border-radius:4px;width:88px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;text-align:right;transition:border-color .12s;}
-.n-inp:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-bg);}
-.n-unit{font-size:12px;color:var(--text3);}
+.num-row:focus-within{background:#f5f5f5;}
+.n-lbl{font-size:13px;color:var(--dark);min-width:80px;flex-shrink:0;}
+.n-inp{background:var(--white);border:1px solid var(--mid);color:var(--black);padding:4px 9px;border-radius:var(--r);width:88px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;text-align:right;transition:border-color .12s;}
+.n-inp:focus{outline:none;border-color:var(--dark);}
+.n-unit{font-size:12px;color:var(--dark);}
+
+/* sub options (for num type — rendered below num-group) */
+.sub-group{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
 
 /* options */
 .opt-group{display:flex;flex-direction:column;gap:4px;}
-.opt-item{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius);cursor:pointer;transition:border-color .1s,background .1s;}
-.opt-item:hover{border-color:var(--border2);background:var(--bg);}
-.opt-item.sel{border-color:var(--text2);background:var(--bg);}
-.rdot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:border-color .1s;}
-.opt-item.sel .rdot{border-color:var(--text2);}
-.rdot::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--text2);opacity:0;transition:opacity .1s;}
+.opt-item{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--white);border:1px solid var(--mid);border-radius:var(--r);cursor:pointer;transition:border-color .1s,background .1s;}
+.opt-item:hover{background:#f5f5f5;}
+.opt-item.sel{border-color:var(--black);background:#f5f5f5;}
+.rdot{width:14px;height:14px;border-radius:50%;border:2px solid var(--mid);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:border-color .1s;}
+.opt-item.sel .rdot{border-color:var(--black);}
+.rdot::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--black);opacity:0;transition:opacity .1s;}
 .opt-item.sel .rdot::after{opacity:1;}
-.o-txt{font-size:13px;color:var(--text2);flex:1;line-height:1.5;}
-.o-inputs{margin-top:9px;}
+.o-txt{font-size:13px;color:var(--black);flex:1;line-height:1.5;}
+.o-inputs{margin-top:8px;}
 
 /* sub options */
-.sub-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;margin-top:7px;transition:border-color .1s;}
-.sub-opt:hover{border-color:var(--surface2);}
-.sub-opt.chk{border-color:var(--text2);background:var(--bg);}
-.chkbox{width:13px;height:13px;border:2px solid var(--border2);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .1s;font-size:9px;color:transparent;}
-.sub-opt.chk .chkbox{border-color:var(--text2);background:var(--text2);color:#fff;}
-.sub-lbl{font-size:12px;color:var(--text2);}
-.sub-opt.chk .sub-lbl{color:var(--text2);}
+.sub-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--white);border:1px solid var(--mid);border-radius:var(--r);cursor:pointer;margin-top:6px;transition:border-color .1s;}
+.sub-opt:hover{background:#f5f5f5;}
+.sub-opt.chk{border-color:var(--black);background:#f5f5f5;}
+.chkbox{width:13px;height:13px;border:2px solid var(--mid);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .1s;font-size:9px;color:transparent;}
+.sub-opt.chk .chkbox{border-color:var(--black);background:var(--black);color:var(--white);}
+.sub-lbl{font-size:12px;color:var(--dark);}
+.sub-opt.chk .sub-lbl{color:var(--black);}
 
-/* divider */
-.divider{height:1px;background:var(--border);margin:24px 0;}
-
-/* output */
-.out-lbl{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px;}
+/* divider & output */
+.divider{height:1px;background:var(--mid);margin:22px 0;}
+.out-lbl{font-size:10px;font-weight:700;color:var(--dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
 .btn-row{display:flex;gap:7px;flex-wrap:wrap;}
-.a-btn{padding:6px 14px;border-radius:var(--radius);border:1px solid #3054bf;font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;font-weight:500;transition:all .1s;display:flex;align-items:center;gap:5px;background:var(--bg);color:var(--text2);}
-.a-btn:hover{background:var(--blue-bg);color:var(--text);}
-.a-btn.primary{background:var(--text);color:#fff;border-color:var(--text);}
+.a-btn{padding:6px 14px;border-radius:var(--r);border:1px solid var(--mid);font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;font-weight:500;transition:all .1s;display:flex;align-items:center;gap:5px;background:var(--white);color:var(--dark);}
+.a-btn:hover{background:#f5f5f5;border-color:var(--dark);color:var(--black);}
+.a-btn.primary{background:var(--black);color:var(--white);border-color:var(--black);}
 .a-btn.primary:hover{background:#333;}
-.a-btn.ghost-danger{color:#e03e3e;border-color:#e03e3e;}
-.a-btn.ghost-danger:hover{background:#fdeaea;}
+.a-btn.danger{border-color:var(--err);color:var(--err);}
+.a-btn.danger:hover{background:#fdf0ef;}
 
 /* modal */
-.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(2px);}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);display:none;align-items:center;justify-content:center;z-index:100;}
 .modal-ov.open{display:flex;}
-.modal{background:var(--bg);border:1px solid var(--border);border-radius:8px;width:660px;max-width:95vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.12);}
-.modal-hd{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
-.modal-ttl{font-size:15px;font-weight:600;}
-.modal-cls{background:none;border:none;color:var(--text3);font-size:18px;cursor:pointer;padding:0 3px;border-radius:3px;transition:background .1s;}
-.modal-cls:hover{background:var(--surface2);color:var(--text);}
+.modal{background:var(--white);border:1px solid var(--mid);border-radius:6px;width:660px;max-width:95vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.14);}
+.modal-hd{padding:14px 18px;border-bottom:1px solid var(--mid);display:flex;justify-content:space-between;align-items:center;}
+.modal-ttl{font-size:15px;font-weight:700;}
+.modal-cls{background:none;border:none;color:var(--dark);font-size:18px;cursor:pointer;padding:0 3px;border-radius:3px;transition:background .1s;}
+.modal-cls:hover{background:var(--mid);color:var(--black);}
 .modal-bd{padding:22px;overflow-y:auto;font-size:14px;line-height:1.9;}
 .modal-bd h2{font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}
-.doc-sub{text-align:center;font-size:12px;color:var(--text3);margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid var(--border);}
+.doc-sub{text-align:center;font-size:12px;color:var(--dark);margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--mid);}
 .doc-cl{margin-bottom:7px;display:flex;gap:10px;}
-.doc-cn{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text3);white-space:nowrap;padding-top:2px;}
+.doc-cn{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dark);white-space:nowrap;padding-top:2px;}
 
-@media print{.topbar,.sidebar,.out-sec,.modal-ov{display:none!important;} .app{display:block;} .main{padding:0;max-width:none;}}
+@media print{.topbar,.sidebar,.out-sec,.modal-ov{display:none!important;}.app{display:block;}.main{padding:0;max-width:none;}}
 </style>
 </head>
 <body>
@@ -164,14 +163,12 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',s
     <span class="t-sub">Minecraft Military</span>
     <div class="t-right"><a class="t-link" href="admin.html">管理者ページ →</a></div>
   </header>
-
   <aside class="sidebar">
-    <div class="sb-label">プリセット</div>
+    <div class="sb-lbl">プリセット</div>
     <div id="preset-list"></div>
     <hr class="sb-hr">
     <button class="sb-reset" onclick="applyReset()">↺ リセット</button>
   </aside>
-
   <main class="main">
     <div class="page-h">レギュレーション作成</div>
     <div class="page-sub">条文を有効にして設定し、PDF または Word で出力します。</div>
@@ -181,7 +178,7 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',s
       <div class="out-lbl">出力</div>
       <div class="btn-row">
         <button class="a-btn primary" onclick="openPreview()">👁 プレビュー</button>
-        <button class="a-btn ghost-danger" onclick="printPDF()">📄 PDF</button>
+        <button class="a-btn danger" onclick="printPDF()">📄 PDF</button>
         <button class="a-btn" onclick="downloadWord()">📝 Word</button>
       </div>
     </div>
@@ -199,13 +196,21 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',s
 </div>
 
 <script>
+// ── State ─────────────────────────────────────────────────────────────────────
 let state={};
 function initState(){
   state={};
-  (window._CLAUSES||[]).forEach(c=>{
+  (window._CL||[]).forEach(c=>{
     state[c.id]={enabled:c.defaultEnabled??true};
-    if(c.type==='num'){state[c.id].inputs={};(c.inputs||[]).forEach(i=>{state[c.id].inputs[i.id]=i.default??0;});}
-    else{
+    if(c.type==='num'){
+      state[c.id].inputs={};
+      (c.inputs||[]).forEach(i=>{state[c.id].inputs[i.id]=i.default??0;});
+      // num-level subOptions
+      (c.subOptions||[]).forEach(sub=>{
+        state[c.id][sub.id]={checked:sub.defaultChecked??false,inputs:{}};
+        (sub.inputs||[]).forEach(i=>{state[c.id][sub.id].inputs[i.id]=i.default??0;});
+      });
+    } else {
       state[c.id].selectedOption=(c.options||[])[0]?.id??null;
       (c.options||[]).forEach(opt=>{
         if(opt.inputs){state[c.id][opt.id]={};opt.inputs.forEach(i=>{state[c.id][opt.id][i.id]=i.default??0;});}
@@ -218,45 +223,45 @@ function initState(){
   });
 }
 
+// ── Sidebar ───────────────────────────────────────────────────────────────────
 function renderSidebar(){
-  const list=document.getElementById('preset-list');
-  list.innerHTML='';
-  (window._PRESETS||[]).forEach(p=>{
-    const btn=document.createElement('button');
-    btn.className='p-btn';btn.id='pb-'+p.id;
+  const list=document.getElementById('preset-list');list.innerHTML='';
+  (window._PR||[]).forEach(p=>{
+    const btn=document.createElement('button');btn.className='p-btn';btn.id='pb-'+p.id;
     btn.innerHTML=p.name+(p.description?`<span class="pd">${p.description}</span>`:'');
-    btn.onclick=()=>applyPreset(p);
-    list.appendChild(btn);
+    btn.onclick=()=>applyPreset(p);list.appendChild(btn);
   });
 }
 
 function applyPreset(p){
-  (window._CLAUSES||[]).forEach(c=>{
+  (window._CL||[]).forEach(c=>{
     const ps=p.config?.[c.id];if(!ps)return;
     if(ps.enabled!==undefined)state[c.id].enabled=ps.enabled;
     if(ps.selectedOption)state[c.id].selectedOption=ps.selectedOption;
     if(ps.inputs)Object.assign(state[c.id].inputs||{},ps.inputs);
+    // top-level subOptions (num type)
+    const allSubs=[...(c.subOptions||[]),...(c.options||[]).flatMap(o=>o.subOptions||[])];
+    allSubs.forEach(sub=>{
+      if(ps[sub.id]){
+        state[c.id][sub.id]=state[c.id][sub.id]||{checked:false,inputs:{}};
+        if(ps[sub.id].checked!==undefined)state[c.id][sub.id].checked=ps[sub.id].checked;
+        if(ps[sub.id].inputs)Object.assign(state[c.id][sub.id].inputs,ps[sub.id].inputs);
+      }
+    });
     (c.options||[]).forEach(opt=>{
       if(ps[opt.id]){state[c.id][opt.id]=state[c.id][opt.id]||{};Object.assign(state[c.id][opt.id],ps[opt.id]);}
-      (opt.subOptions||[]).forEach(sub=>{
-        if(ps[sub.id]){
-          state[c.id][sub.id]=state[c.id][sub.id]||{checked:false,inputs:{}};
-          if(ps[sub.id].checked!==undefined)state[c.id][sub.id].checked=ps[sub.id].checked;
-          if(ps[sub.id].inputs)Object.assign(state[c.id][sub.id].inputs,ps[sub.id].inputs);
-        }
-      });
     });
   });
   document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('pb-'+p.id)?.classList.add('active');
   renderAll();
 }
-
 function applyReset(){initState();document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('active'));renderAll();}
 
+// ── Render ────────────────────────────────────────────────────────────────────
 function renderAll(){
   const con=document.getElementById('clauses-container');con.innerHTML='';
-  (window._CLAUSES||[]).forEach((c,i)=>{
+  (window._CL||[]).forEach((c,i)=>{
     const s=state[c.id];
     const card=document.createElement('div');
     card.className='c-card '+(s.enabled?'on':'off');card.id='card-'+c.id;
@@ -271,15 +276,38 @@ function renderAll(){
   });
 }
 
+function renderSubOpts(c,subs,context){
+  // context: 'num' = top-level, otherwise inside opt
+  return subs.map(sub=>{
+    const ss=state[c.id][sub.id]||{checked:false,inputs:{}};
+    let h=`<div class="sub-opt${ss.checked?' chk':''}" onclick="togSub('${c.id}','${sub.id}',event)">
+      <span class="chkbox">✓</span><span class="sub-lbl">${sub.label}</span></div>`;
+    if(ss.checked&&sub.inputs?.length){
+      h+=`<div class="o-inputs"><div class="num-group">${sub.inputs.map(si=>`
+        <div class="num-row">
+          <span class="n-lbl">${si.label}</span>
+          <input class="n-inp" type="number" min="1" value="${ss.inputs?.[si.id]??si.default}"
+            oninput="setSubNum('${c.id}','${sub.id}','${si.id}',this.value)" onclick="event.stopPropagation()">
+          ${si.unit?`<span class="n-unit">${si.unit}</span>`:''}
+        </div>`).join('')}</div></div>`;
+    }
+    return h;
+  }).join('');
+}
+
 function renderBody(c){
   const s=state[c.id];
   if(c.type==='num'){
-    return `<div class="num-group">${(c.inputs||[]).map(inp=>`
+    let h=`<div class="num-group">${(c.inputs||[]).map(inp=>`
       <div class="num-row">
         <span class="n-lbl">${inp.label}</span>
         <input class="n-inp" type="number" min="1" value="${s.inputs?.[inp.id]??inp.default}" oninput="setNum('${c.id}',null,'${inp.id}',this.value)">
         ${inp.unit?`<span class="n-unit">${inp.unit}</span>`:''}
       </div>`).join('')}</div>`;
+    if(c.subOptions?.length){
+      h+=`<div class="sub-group">${renderSubOpts(c,c.subOptions,'num')}</div>`;
+    }
+    return h;
   }
   return `<div class="opt-group">${(c.options||[]).map(opt=>renderOpt(c,opt)).join('')}</div>`;
 }
@@ -298,52 +326,45 @@ function renderOpt(c,opt){
       </div>`).join('')}</div></div>`;
   }
   if(opt.subOptions?.length&&sel){
-    opt.subOptions.forEach(sub=>{
-      const ss=s[sub.id]||{checked:false,inputs:{}};
-      h+=`<div class="sub-opt${ss.checked?' chk':''}" onclick="togSub('${c.id}','${sub.id}',event)">
-        <span class="chkbox">✓</span><span class="sub-lbl">${sub.label}</span></div>`;
-      if(ss.checked&&sub.inputs?.length){
-        h+=`<div class="o-inputs"><div class="num-group">${sub.inputs.map(si=>`
-          <div class="num-row">
-            <span class="n-lbl">${si.label}</span>
-            <input class="n-inp" type="number" min="1" value="${ss.inputs?.[si.id]??si.default}"
-              oninput="setSubNum('${c.id}','${sub.id}','${si.id}',this.value)" onclick="event.stopPropagation()">
-            ${si.unit?`<span class="n-unit">${si.unit}</span>`:''}
-          </div>`).join('')}</div></div>`;
-      }
-    });
+    h+=renderSubOpts(c,opt.subOptions,'opt');
   }
   h+=`</div></div>`;return h;
 }
 
+// ── Mutators ──────────────────────────────────────────────────────────────────
 function setEnabled(id,val){
   state[id].enabled=val;
   document.getElementById('card-'+id).className='c-card '+(val?'on':'off');
   document.getElementById('body-'+id).className='c-body'+(val?'':' hide');
 }
-function selOpt(cid,oid){state[cid].selectedOption=oid;document.getElementById('body-'+cid).innerHTML=renderBody(window._CLAUSES.find(x=>x.id===cid));}
+function selOpt(cid,oid){state[cid].selectedOption=oid;document.getElementById('body-'+cid).innerHTML=renderBody(window._CL.find(x=>x.id===cid));}
 function setNum(cid,oid,iid,val){const v=parseFloat(val)||0;if(oid){state[cid][oid]=state[cid][oid]||{};state[cid][oid][iid]=v;}else{state[cid].inputs[iid]=v;}}
-function togSub(cid,sid,e){e.stopPropagation();state[cid][sid]=state[cid][sid]||{checked:false,inputs:{}};state[cid][sid].checked=!state[cid][sid].checked;document.getElementById('body-'+cid).innerHTML=renderBody(window._CLAUSES.find(x=>x.id===cid));}
+function togSub(cid,sid,e){e.stopPropagation();state[cid][sid]=state[cid][sid]||{checked:false,inputs:{}};state[cid][sid].checked=!state[cid][sid].checked;document.getElementById('body-'+cid).innerHTML=renderBody(window._CL.find(x=>x.id===cid));}
 function setSubNum(cid,sid,iid,val){state[cid][sid].inputs[iid]=parseFloat(val)||0;}
 
+// ── Text generation ───────────────────────────────────────────────────────────
 function ipl(tmpl,vals){if(!tmpl)return'';return tmpl.replace(/\{\{(\w+)\}\}/g,(_,k)=>vals?.[k]??'?');}
 function buildText(c){
   const s=state[c.id];if(!s.enabled)return null;
   try{
-    if(c.type==='num')return ipl(c.textTemplate,s.inputs);
+    if(c.type==='num'){
+      let t=ipl(c.textTemplate,s.inputs);
+      (c.subOptions||[]).forEach(sub=>{const ss=s[sub.id];if(ss?.checked)t+=ipl(sub.textTemplate,ss.inputs||{});});
+      return t;
+    }
     const opt=(c.options||[]).find(o=>o.id===s.selectedOption);if(!opt)return null;
     let t=ipl(opt.textTemplate,s[opt.id]||{});
     (opt.subOptions||[]).forEach(sub=>{const ss=s[sub.id];if(ss?.checked)t+=ipl(sub.textTemplate,ss.inputs||{});});
     return t;
   }catch{return'（テキスト生成エラー）';}
 }
-function genAll(){const lines=[];let n=1;(window._CLAUSES||[]).forEach(c=>{const t=buildText(c);if(t){lines.push({num:n,text:t});n++;}});return lines;}
+function genAll(){const lines=[];let n=1;(window._CL||[]).forEach(c=>{const t=buildText(c);if(t){lines.push({num:n,text:t});n++;}});return lines;}
 
 function openPreview(){
   const lines=genAll();const now=new Date().toLocaleDateString('ja-JP');
   let h=`<h2>模擬戦 レギュレーション</h2><div class="doc-sub">作成日: ${now}　／　Minecraft Military</div>`;
-  lines.forEach(l=>{h+=`<div class="doc-cl"><span class="doc-cn">${l.num}.</span>${l.text}</div>`;});
-  if(!lines.length)h+='<p style="color:var(--text3);text-align:center;padding:24px">有効な条文がありません。</p>';
+  lines.forEach(l=>{h+=`<div class="doc-cl"><span class="doc-cn">第${l.num}条</span>${l.text}</div>`;});
+  if(!lines.length)h+='<p style="color:var(--dark);text-align:center;padding:24px">有効な条文がありません。</p>';
   document.getElementById('preview-content').innerHTML=h;
   document.getElementById('modal').classList.add('open');
 }
@@ -356,12 +377,12 @@ async function downloadWord(){
     new Paragraph({text:'模擬戦 レギュレーション',heading:HeadingLevel.HEADING_1,alignment:AlignmentType.CENTER}),
     new Paragraph({children:[new TextRun({text:`作成日: ${now}　／　Minecraft Military`,size:20,color:'888888'})],alignment:AlignmentType.CENTER}),
     new Paragraph({text:''}),
-    ...lines.map(l=>new Paragraph({children:[new TextRun({text:`${l.num}.　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}))
+    ...lines.map(l=>new Paragraph({children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}))
   ];
   const doc=new Document({sections:[{children}]});
   const blob=await Packer.toBlob(doc);
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='ragulation.docx';
+  const a=document.createElement('a');a.href=url;a.download='模擬戦_レギュレーション.docx';
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 </script>
