@@ -104,9 +104,9 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',s
 
 /* options */
 .opt-group{display:flex;flex-direction:column;gap:4px;}
-.opt-item{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:border-color .1s,background .1s;}
+.opt-item{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:border-color .1s,background .1s;}
 .opt-item:hover{border-color:var(--border2);background:var(--surface2);}
-.opt-item.sel{border-color:var(--text2);background:var(--surface2);}
+.opt-item.sel{border-color:var(--text2);background:var(--surface);}
 .rdot{width:14px;height:14px;border-radius:50%;border:2px solid var(--border2);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:border-color .1s;}
 .opt-item.sel .rdot{border-color:var(--text2);}
 .rdot::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--text2);opacity:0;transition:opacity .1s;}
@@ -117,11 +117,11 @@ body{background:var(--bg);color:var(--text);font-family:'Noto Sans JP','Inter',s
 /* sub options */
 .sub-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;margin-top:7px;transition:border-color .1s;}
 .sub-opt:hover{border-color:var(--border2);}
-.sub-opt.chk{border-color:var(--text);background:var(--surface2);}
+.sub-opt.chk{border-color:var(--text2);background:var(--surface2);}
 .chkbox{width:13px;height:13px;border:2px solid var(--border2);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .1s;font-size:9px;color:transparent;}
-.sub-opt.chk .chkbox{border-color:var(--text);background:var(--text);color:#fff;}
+.sub-opt.chk .chkbox{border-color:var(--text2);background:var(--text2);color:#fff;}
 .sub-lbl{font-size:12px;color:var(--text2);}
-.sub-opt.chk .sub-lbl{color:var(--text);}
+.sub-opt.chk .sub-lbl{color:var(--text2);}
 
 /* divider */
 .divider{height:1px;background:var(--border);margin:24px 0;}
