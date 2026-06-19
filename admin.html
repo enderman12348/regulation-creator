@@ -112,10 +112,24 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans JP','Inter',san
 .cl-list{display:flex;flex-direction:column;gap:3px;}
 
 /* clause row — key: position:relative for drop indicator */
-.cl-row{background:var(--bg);border:1px solid var(--bd);border-radius:var(--r);padding:10px 13px;display:flex;align-items:center;gap:11px;transition:border-color .1s,box-shadow .1s;position:relative;}
-.cl-row:hover{border-color:var(--bd2);box-shadow:var(--sh);}
+.cl-row{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:10px 13px;
+  display:flex;
+  align-items:center;
+  gap:11px;
+  transition:.12s;
+  position:relative;
+}
+
+.cl-row:hover{
+  border-color:var(--blue);
+  box-shadow:0 0 0 2px var(--blue-bg);
+}
 .cl-row.dragging{
-  opacity:0.5;
+  opacity:0.6;
 }
 
 .cl-row.drop-above::before{
@@ -136,9 +150,31 @@ body{background:var(--bg);color:var(--tx);font-family:'Noto Sans JP','Inter',san
   bottom:-2px;
   height:3px;
   background:var(--blue);
-}  
+}
+.cl-row.drop-above::before{
+  content:'';
+  position:absolute;
+  left:-1px;
+  right:-1px;
+  top:-2px;
+  height:2px;
+  background:var(--blue);
+}
+
+.cl-row.drop-below::after{
+  content:'';
+  position:absolute;
+  left:-1px;
+  right:-1px;
+  bottom:-2px;
+  height:2px;
+  background:var(--blue);
+}
 .dh{color:var(--tx3);font-size:16px;cursor:grab;user-select:none;line-height:1;padding:2px 3px;border-radius:3px;transition:color .1s,background .1s;}
-.dh:hover{color:var(--tx2);background:var(--sf2);}
+.dh:hover{
+  color:var(--blue);
+  background:var(--blue-bg);
+}
 .dh:active{cursor:grabbing;}
 .cl-info{flex:1;min-width:0;}
 .cl-name{font-size:13px;font-weight:500;}
