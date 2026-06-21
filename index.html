@@ -11,13 +11,33 @@
   const db=getFirestore(initializeApp({apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"}));
   window.addEventListener('DOMContentLoaded',async()=>{
     try{
-      const[cs,ps,chs]=await Promise.all([getDocs(collection(db,'clauses')),getDocs(collection(db,'presets')),getDocs(collection(db,'chapters'))]);
+      const[cs,ps]=await Promise.all([
+        getDocs(collection(db,'clauses')),
+        getDocs(collection(db,'presets'))
+      ]);
       const cl=[];cs.forEach(d=>cl.push({id:d.id,...d.data()}));cl.sort((a,b)=>(a.order??0)-(b.order??0));
       const pr=[];ps.forEach(d=>pr.push({id:d.id,...d.data()}));
-      const ch=[];chs.forEach(d=>ch.push({id:d.id,...d.data()}));ch.sort((a,b)=>(a.order??0)-(b.order??0));
+
+      // chapters は後から追加されるため、未登録でもエラーにしない
+      let ch=[];
+      try{
+        const chs=await getDocs(collection(db,'chapters'));
+        chs.forEach(d=>ch.push({id:d.id,...d.data()}));
+        ch.sort((a,b)=>(a.order??0)-(b.order??0));
+      }catch(_){}
+
+      // chapters がまだ作られていない場合はダミー章で全条文を表示
+      if(!ch.length&&cl.length){
+        ch=[{id:'__default__',title:'レギュレーション',order:0}];
+        cl.forEach(c=>{ if(!c.chapterId) c.chapterId='__default__'; });
+      }
+
       window._CL=cl;window._PR=pr;window._CH=ch;
       initState();renderSidebar();renderAll();
-    }catch(e){document.getElementById('load-error').style.display='flex';console.error(e);}
+    }catch(e){
+      console.error(e);
+      document.getElementById('load-error').style.display='flex';
+    }
     document.getElementById('loading').style.display='none';
   });
 </script>
