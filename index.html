@@ -11,10 +11,11 @@
   const db=getFirestore(initializeApp({apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"}));
   window.addEventListener('DOMContentLoaded',async()=>{
     try{
-      const[cs,ps]=await Promise.all([getDocs(collection(db,'clauses')),getDocs(collection(db,'presets'))]);
+      const[cs,ps,chs]=await Promise.all([getDocs(collection(db,'clauses')),getDocs(collection(db,'presets')),getDocs(collection(db,'chapters'))]);
       const cl=[];cs.forEach(d=>cl.push({id:d.id,...d.data()}));cl.sort((a,b)=>(a.order??0)-(b.order??0));
       const pr=[];ps.forEach(d=>pr.push({id:d.id,...d.data()}));
-      window._CL=cl;window._PR=pr;
+      const ch=[];chs.forEach(d=>ch.push({id:d.id,...d.data()}));ch.sort((a,b)=>(a.order??0)-(b.order??0));
+      window._CL=cl;window._PR=pr;window._CH=ch;
       initState();renderSidebar();renderAll();
     }catch(e){document.getElementById('load-error').style.display='flex';console.error(e);}
     document.getElementById('loading').style.display='none';
@@ -22,33 +23,27 @@
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap');
-
-/* ── 4-tone palette ──────────────────────────────────────────────────────── */
 :root{
-  --black:#1a1a1a;   /* 黒：テキスト、ON状態 */
-  --dark:#555555;    /* 濃グレー：サブテキスト、ボーダー強 */
-  --mid:#cccccc;     /* 薄グレー：ボーダー、背景アクセント */
-  --white:#ffffff;   /* 白：背景 */
-
-  /* アクセント（赤のみ危険操作に使用） */
-  --err:#c0392b;
-
+  --black:#1a1a1a;
+  --dark:#555;
+  --mid:#ccc;
+  --white:#fff;
+  --blue:#2563eb;
+  --blue-bg:#eff6ff;
+  --red:#dc2626;
+  --red-bg:#fef2f2;
   --r:4px;
 }
-
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
 
-/* loading */
 #loading{position:fixed;inset:0;background:var(--white);z-index:300;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--dark);font-size:13px;}
-#load-error{display:none;position:fixed;inset:0;background:var(--white);z-index:300;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--err);font-size:13px;}
+#load-error{display:none;position:fixed;inset:0;background:var(--white);z-index:300;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--red);font-size:13px;}
 .spin{width:16px;height:16px;border:2px solid var(--mid);border-top-color:var(--dark);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* layout */
 .app{display:grid;grid-template-columns:196px 1fr;grid-template-rows:44px 1fr;min-height:100vh;}
 
-/* topbar */
 .topbar{grid-column:1/-1;border-bottom:1px solid var(--mid);display:flex;align-items:center;padding:0 18px;gap:8px;background:var(--white);position:sticky;top:0;z-index:50;}
 .t-logo{font-size:13px;font-weight:700;color:var(--black);}
 .t-sep{color:var(--mid);font-size:12px;}
@@ -57,24 +52,26 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .t-link{font-size:12px;color:var(--dark);text-decoration:none;padding:3px 9px;border-radius:var(--r);border:1px solid var(--mid);transition:background .1s;}
 .t-link:hover{background:var(--mid);color:var(--black);}
 
-/* sidebar */
 .sidebar{border-right:1px solid var(--mid);padding:12px 8px;display:flex;flex-direction:column;gap:1px;background:var(--white);overflow-y:auto;}
 .sb-lbl{font-size:10px;font-weight:700;color:var(--dark);letter-spacing:.08em;text-transform:uppercase;padding:8px 8px 3px;border-top:1px solid var(--mid);margin-top:6px;}
 .sb-lbl:first-child{border-top:none;margin-top:0;padding-top:4px;}
 .p-btn{width:100%;background:none;border:none;color:var(--dark);padding:5px 8px;border-radius:var(--r);cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:13px;text-align:left;transition:background .1s,color .1s;display:flex;flex-direction:column;}
 .p-btn:hover{background:var(--mid);color:var(--black);}
-.p-btn.active{background:var(--black);color:var(--white);}
+.p-btn.active{background:var(--blue);color:var(--white);}
 .p-btn .pd{font-size:11px;opacity:.7;}
 .sb-hr{border:none;border-top:1px solid var(--mid);margin:6px 8px;}
 .sb-reset{width:100%;background:none;border:none;color:var(--dark);padding:5px 8px;border-radius:var(--r);cursor:pointer;font-size:12px;text-align:left;transition:background .1s;font-family:'Noto Sans JP',sans-serif;}
 .sb-reset:hover{background:var(--mid);}
 
-/* main */
 .main{padding:32px 40px;overflow-y:auto;max-width:780px;}
 .page-h{font-size:21px;font-weight:700;margin-bottom:3px;letter-spacing:-.02em;}
 .page-sub{font-size:13px;color:var(--dark);margin-bottom:26px;}
 
-/* clause card */
+/* Chapter */
+.ch-section{margin-bottom:28px;}
+.ch-title{font-size:18px;font-weight:700;color:var(--black);margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--black);}
+
+/* Clause card */
 .c-card{border:1px solid var(--mid);border-radius:var(--r);margin-bottom:5px;background:var(--white);transition:opacity .2s;}
 .c-card.on{border-left:3px solid var(--black);}
 .c-card.off{opacity:.38;}
@@ -90,7 +87,6 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .c-body{padding:0 12px 12px 42px;display:flex;flex-direction:column;gap:8px;}
 .c-body.hide{display:none;}
 
-/* num group */
 .num-group{border:1px solid var(--mid);border-radius:var(--r);overflow:hidden;}
 .num-row{display:flex;align-items:center;padding:8px 12px;gap:10px;border-bottom:1px solid var(--mid);background:var(--white);}
 .num-row:last-child{border-bottom:none;}
@@ -100,10 +96,8 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .n-inp:focus{outline:none;border-color:var(--dark);}
 .n-unit{font-size:12px;color:var(--dark);}
 
-/* sub options (for num type — rendered below num-group) */
 .sub-group{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
 
-/* options */
 .opt-group{display:flex;flex-direction:column;gap:4px;}
 .opt-item{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--white);border:1px solid var(--mid);border-radius:var(--r);cursor:pointer;transition:border-color .1s,background .1s;}
 .opt-item:hover{background:#f5f5f5;}
@@ -115,7 +109,6 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .o-txt{font-size:13px;color:var(--black);flex:1;line-height:1.5;}
 .o-inputs{margin-top:8px;}
 
-/* sub options */
 .sub-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--white);border:1px solid var(--mid);border-radius:var(--r);cursor:pointer;margin-top:6px;transition:border-color .1s;}
 .sub-opt:hover{background:#f5f5f5;}
 .sub-opt.chk{border-color:var(--black);background:#f5f5f5;}
@@ -124,7 +117,6 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .sub-lbl{font-size:12px;color:var(--dark);}
 .sub-opt.chk .sub-lbl{color:var(--black);}
 
-/* divider & output */
 .divider{height:1px;background:var(--mid);margin:22px 0;}
 .out-lbl{font-size:10px;font-weight:700;color:var(--dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
 .btn-row{display:flex;gap:7px;flex-wrap:wrap;}
@@ -132,10 +124,9 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .a-btn:hover{background:#f5f5f5;border-color:var(--dark);color:var(--black);}
 .a-btn.primary{background:var(--black);color:var(--white);border-color:var(--black);}
 .a-btn.primary:hover{background:#333;}
-.a-btn.danger{border-color:var(--err);color:var(--err);}
-.a-btn.danger:hover{background:#fdf0ef;}
+.a-btn.danger{border-color:var(--red);color:var(--red);}
+.a-btn.danger:hover{background:var(--red-bg);}
 
-/* modal */
 .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);display:none;align-items:center;justify-content:center;z-index:100;}
 .modal-ov.open{display:flex;}
 .modal{background:var(--white);border:1px solid var(--mid);border-radius:6px;width:660px;max-width:95vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.14);}
@@ -146,6 +137,7 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .modal-bd{padding:22px;overflow-y:auto;font-size:14px;line-height:1.9;}
 .modal-bd h2{font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}
 .doc-sub{text-align:center;font-size:12px;color:var(--dark);margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--mid);}
+.doc-ch{font-size:16px;font-weight:700;margin-top:16px;margin-bottom:8px;}
 .doc-cl{margin-bottom:7px;display:flex;gap:10px;}
 .doc-cn{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dark);white-space:nowrap;padding-top:2px;}
 
@@ -177,9 +169,9 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
     <div class="out-sec">
       <div class="out-lbl">出力</div>
       <div class="btn-row">
-        <button class="a-btn primary" onclick="openPreview()">👁 プレビュー</button>
-        <button class="a-btn danger" onclick="printPDF()">📄 PDF</button>
-        <button class="a-btn" onclick="downloadWord()">📝 Word</button>
+        <button class="a-btn primary" onclick="openPreview()">プレビュー</button>
+        <button class="a-btn danger" onclick="printPDF()">PDF</button>
+        <button class="a-btn" onclick="downloadWord()">Word</button>
       </div>
     </div>
   </main>
@@ -196,21 +188,22 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 </div>
 
 <script>
-// ── State ─────────────────────────────────────────────────────────────────────
 let state={};
 function initState(){
   state={};
   (window._CL||[]).forEach(c=>{
     state[c.id]={enabled:c.defaultEnabled??true};
-    if(c.type==='num'){
+    if(c.type==='toggle'){
+      // toggle type: just checked or not
+      state[c.id].checked=c.defaultEnabled??true;
+    }else if(c.type==='num'){
       state[c.id].inputs={};
       (c.inputs||[]).forEach(i=>{state[c.id].inputs[i.id]=i.default??0;});
-      // num-level subOptions
       (c.subOptions||[]).forEach(sub=>{
         state[c.id][sub.id]={checked:sub.defaultChecked??false,inputs:{}};
         (sub.inputs||[]).forEach(i=>{state[c.id][sub.id].inputs[i.id]=i.default??0;});
       });
-    } else {
+    }else{
       state[c.id].selectedOption=(c.options||[])[0]?.id??null;
       (c.options||[]).forEach(opt=>{
         if(opt.inputs){state[c.id][opt.id]={};opt.inputs.forEach(i=>{state[c.id][opt.id][i.id]=i.default??0;});}
@@ -223,7 +216,6 @@ function initState(){
   });
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
 function renderSidebar(){
   const list=document.getElementById('preset-list');list.innerHTML='';
   (window._PR||[]).forEach(p=>{
@@ -237,9 +229,9 @@ function applyPreset(p){
   (window._CL||[]).forEach(c=>{
     const ps=p.config?.[c.id];if(!ps)return;
     if(ps.enabled!==undefined)state[c.id].enabled=ps.enabled;
+    if(c.type==='toggle'&&ps.checked!==undefined)state[c.id].checked=ps.checked;
     if(ps.selectedOption)state[c.id].selectedOption=ps.selectedOption;
     if(ps.inputs)Object.assign(state[c.id].inputs||{},ps.inputs);
-    // top-level subOptions (num type)
     const allSubs=[...(c.subOptions||[]),...(c.options||[]).flatMap(o=>o.subOptions||[])];
     allSubs.forEach(sub=>{
       if(ps[sub.id]){
@@ -258,26 +250,51 @@ function applyPreset(p){
 }
 function applyReset(){initState();document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('active'));renderAll();}
 
-// ── Render ────────────────────────────────────────────────────────────────────
 function renderAll(){
   const con=document.getElementById('clauses-container');con.innerHTML='';
-  (window._CL||[]).forEach((c,i)=>{
-    const s=state[c.id];
-    const card=document.createElement('div');
-    card.className='c-card '+(s.enabled?'on':'off');card.id='card-'+c.id;
-    card.innerHTML=`
-      <div class="c-hd">
-        <label class="tog"><input type="checkbox" ${s.enabled?'checked':''} onchange="setEnabled('${c.id}',this.checked)"><span class="tog-sl"></span></label>
-        <span class="c-num">${String(i+1).padStart(2,'0')}</span>
-        <span class="c-ttl">${c.title}</span>
-      </div>
-      <div class="c-body${s.enabled?'':' hide'}" id="body-${c.id}">${renderBody(c)}</div>`;
-    con.appendChild(card);
+  const ch=window._CH||[];const cl=window._CL||[];
+  ch.forEach(chap=>{
+    const chDiv=document.createElement('div');chDiv.className='ch-section';
+    chDiv.innerHTML=`<div class="ch-title">${chap.title}</div>`;
+    const chapClauses=cl.filter(c=>c.chapterId===chap.id);
+    chapClauses.forEach((c,idx)=>{
+      const s=state[c.id];
+      const card=document.createElement('div');
+      card.className='c-card '+(s.enabled?'on':'off');card.id='card-'+c.id;
+      card.innerHTML=`
+        <div class="c-hd">
+          <label class="tog"><input type="checkbox" ${s.enabled?'checked':''} onchange="setEnabled('${c.id}',this.checked)"><span class="tog-sl"></span></label>
+          <span class="c-num">${String(idx+1).padStart(2,'0')}</span>
+          <span class="c-ttl">${c.title}</span>
+        </div>
+        <div class="c-body${s.enabled?'':' hide'}" id="body-${c.id}">${renderBody(c)}</div>`;
+      chDiv.appendChild(card);
+    });
+    con.appendChild(chDiv);
   });
 }
 
-function renderSubOpts(c,subs,context){
-  // context: 'num' = top-level, otherwise inside opt
+function renderBody(c){
+  const s=state[c.id];
+  if(c.type==='toggle'){
+    return `<div style="padding:0 12px 8px 42px;font-size:13px;color:var(--dark)">${c.textTemplate||''}</div>`;
+  }
+  if(c.type==='num'){
+    let h=`<div class="num-group">${(c.inputs||[]).map(inp=>`
+      <div class="num-row">
+        <span class="n-lbl">${inp.label}</span>
+        <input class="n-inp" type="number" min="1" value="${s.inputs?.[inp.id]??inp.default}" oninput="setNum('${c.id}',null,'${inp.id}',this.value)">
+        ${inp.unit?`<span class="n-unit">${inp.unit}</span>`:''}
+      </div>`).join('')}</div>`;
+    if(c.subOptions?.length){
+      h+=`<div class="sub-group">${renderSubOpts(c,c.subOptions,'num')}</div>`;
+    }
+    return h;
+  }
+  return `<div class="opt-group">${(c.options||[]).map(opt=>renderOpt(c,opt)).join('')}</div>`;
+}
+
+function renderSubOpts(c,subs){
   return subs.map(sub=>{
     const ss=state[c.id][sub.id]||{checked:false,inputs:{}};
     let h=`<div class="sub-opt${ss.checked?' chk':''}" onclick="togSub('${c.id}','${sub.id}',event)">
@@ -295,23 +312,6 @@ function renderSubOpts(c,subs,context){
   }).join('');
 }
 
-function renderBody(c){
-  const s=state[c.id];
-  if(c.type==='num'){
-    let h=`<div class="num-group">${(c.inputs||[]).map(inp=>`
-      <div class="num-row">
-        <span class="n-lbl">${inp.label}</span>
-        <input class="n-inp" type="number" min="1" value="${s.inputs?.[inp.id]??inp.default}" oninput="setNum('${c.id}',null,'${inp.id}',this.value)">
-        ${inp.unit?`<span class="n-unit">${inp.unit}</span>`:''}
-      </div>`).join('')}</div>`;
-    if(c.subOptions?.length){
-      h+=`<div class="sub-group">${renderSubOpts(c,c.subOptions,'num')}</div>`;
-    }
-    return h;
-  }
-  return `<div class="opt-group">${(c.options||[]).map(opt=>renderOpt(c,opt)).join('')}</div>`;
-}
-
 function renderOpt(c,opt){
   const s=state[c.id];const sel=s.selectedOption===opt.id;
   let h=`<div class="opt-item${sel?' sel':''}" onclick="selOpt('${c.id}','${opt.id}')">
@@ -326,12 +326,11 @@ function renderOpt(c,opt){
       </div>`).join('')}</div></div>`;
   }
   if(opt.subOptions?.length&&sel){
-    h+=renderSubOpts(c,opt.subOptions,'opt');
+    h+=renderSubOpts(c,opt.subOptions);
   }
   h+=`</div></div>`;return h;
 }
 
-// ── Mutators ──────────────────────────────────────────────────────────────────
 function setEnabled(id,val){
   state[id].enabled=val;
   document.getElementById('card-'+id).className='c-card '+(val?'on':'off');
@@ -342,11 +341,11 @@ function setNum(cid,oid,iid,val){const v=parseFloat(val)||0;if(oid){state[cid][o
 function togSub(cid,sid,e){e.stopPropagation();state[cid][sid]=state[cid][sid]||{checked:false,inputs:{}};state[cid][sid].checked=!state[cid][sid].checked;document.getElementById('body-'+cid).innerHTML=renderBody(window._CL.find(x=>x.id===cid));}
 function setSubNum(cid,sid,iid,val){state[cid][sid].inputs[iid]=parseFloat(val)||0;}
 
-// ── Text generation ───────────────────────────────────────────────────────────
 function ipl(tmpl,vals){if(!tmpl)return'';return tmpl.replace(/\{\{(\w+)\}\}/g,(_,k)=>vals?.[k]??'?');}
 function buildText(c){
   const s=state[c.id];if(!s.enabled)return null;
   try{
+    if(c.type==='toggle')return ipl(c.textTemplate,{});
     if(c.type==='num'){
       let t=ipl(c.textTemplate,s.inputs);
       (c.subOptions||[]).forEach(sub=>{const ss=s[sub.id];if(ss?.checked)t+=ipl(sub.textTemplate,ss.inputs||{});});
@@ -358,12 +357,16 @@ function buildText(c){
     return t;
   }catch{return'（テキスト生成エラー）';}
 }
-function genAll(){const lines=[];let n=1;(window._CL||[]).forEach(c=>{const t=buildText(c);if(t){lines.push({num:n,text:t});n++;}});return lines;}
+function genAll(){const lines=[];const ch=window._CH||[];const cl=window._CL||[];ch.forEach(chap=>{let n=1;const chapCl=cl.filter(c=>c.chapterId===chap.id);chapCl.forEach(c=>{const t=buildText(c);if(t){lines.push({chapter:chap.title,num:n,text:t});n++;}});});return lines;}
 
 function openPreview(){
   const lines=genAll();const now=new Date().toLocaleDateString('ja-JP');
   let h=`<h2>模擬戦 レギュレーション</h2><div class="doc-sub">作成日: ${now}　／　Minecraft Military</div>`;
-  lines.forEach(l=>{h+=`<div class="doc-cl"><span class="doc-cn">第${l.num}条</span>${l.text}</div>`;});
+  let curCh='';
+  lines.forEach(l=>{
+    if(l.chapter!==curCh){h+=`<div class="doc-ch">${l.chapter}</div>`;curCh=l.chapter;}
+    h+=`<div class="doc-cl"><span class="doc-cn">第${l.num}条</span>${l.text}</div>`;
+  });
   if(!lines.length)h+='<p style="color:var(--dark);text-align:center;padding:24px">有効な条文がありません。</p>';
   document.getElementById('preview-content').innerHTML=h;
   document.getElementById('modal').classList.add('open');
@@ -376,9 +379,16 @@ async function downloadWord(){
   const children=[
     new Paragraph({text:'模擬戦 レギュレーション',heading:HeadingLevel.HEADING_1,alignment:AlignmentType.CENTER}),
     new Paragraph({children:[new TextRun({text:`作成日: ${now}　／　Minecraft Military`,size:20,color:'888888'})],alignment:AlignmentType.CENTER}),
-    new Paragraph({text:''}),
-    ...lines.map(l=>new Paragraph({children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}))
+    new Paragraph({text:''})
   ];
+  let curCh='';
+  lines.forEach(l=>{
+    if(l.chapter!==curCh){
+      children.push(new Paragraph({text:l.chapter,heading:HeadingLevel.HEADING_2,spacing:{before:200,after:100}}));
+      curCh=l.chapter;
+    }
+    children.push(new Paragraph({children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}));
+  });
   const doc=new Document({sections:[{children}]});
   const blob=await Packer.toBlob(doc);
   const url=URL.createObjectURL(blob);
