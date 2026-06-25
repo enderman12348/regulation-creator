@@ -337,6 +337,10 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
     <!-- TOGGLE -->
     <div id="toggle-flds">
       <div class="f-row"><label>テキスト（表示内容）</label><textarea class="f-ta" id="c-toggle-txt" placeholder="例：このルールが有効です。"></textarea></div>
+      <div class="dyn-sec" style="margin-top:11px">
+        <div class="dyn-ttl">サブオプション（付加条文チェックボックス） <button class="dyn-add" onclick="addTopSub()">＋ 追加</button></div>
+        <div id="toggle-sub-con"></div>
+      </div>
     </div>
 
     <!-- NUM fields -->
@@ -537,6 +541,7 @@ function openCModal(id){
   document.getElementById('inp-con').innerHTML='';
   document.getElementById('opt-con').innerHTML='';
   document.getElementById('top-sub-con').innerHTML='';
+  document.getElementById('toggle-sub-con').innerHTML='';
   document.getElementById('c-tmpl').value='';
   document.getElementById('c-toggle-txt').value='';
   
@@ -554,7 +559,7 @@ function openCModal(id){
     document.getElementById('c-chapter').value=c.chapterId||'';
     document.getElementById('c-def').value=String(c.defaultEnabled!==false);
     onTypeChg();
-    if(c.type==='toggle'){document.getElementById('c-toggle-txt').value=c.textTemplate||'';}
+    if(c.type==='toggle'){document.getElementById('c-toggle-txt').value=c.textTemplate||'';(c.subOptions||[]).forEach(s=>addToggleSub(s));}
     else if(c.type==='num'){document.getElementById('c-tmpl').value=c.textTemplate||'';(c.inputs||[]).forEach(i=>addInp(i));(c.subOptions||[]).forEach(s=>addTopSub(s));}
     else{(c.options||[]).forEach(o=>addOpt(o));}
   }else{
@@ -576,6 +581,10 @@ function addInp(d={}){const i=_ic++;const div=document.createElement('div');div.
 
 function addTopSub(d={}){const i=_sc++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in" id="tsi-${i}" value="${d.id||''}" placeholder="例: z_overhang"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="tsl-${i}" value="${d.label||''}" placeholder="例: z軸はみ出し許容"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta" id="tst-${i}">${d.textTemplate||''}</textarea></div><div class="f-row"><label>デフォルト</label><select class="f-sel" id="tsd-${i}" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('ts-inp-${i}')">＋</button></div><div id="ts-inp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('ts-inp-'+i,j,inp)).join('')}</div></div>`;document.getElementById('top-sub-con').appendChild(div);}
 
+function addToggleSub(d={}){const i=_sc++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in" id="togi-${i}" value="${d.id||''}" placeholder="例: extra_rule"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="togl-${i}" value="${d.label||''}" placeholder="例: 追加ルールを適用する"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta" id="togt-${i}">${d.textTemplate||''}</textarea></div><div class="f-row"><label>デフォルト</label><select class="f-sel" id="togd-${i}" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('tog-inp-${i}')">＋</button></div><div id="tog-inp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('tog-inp-'+i,j,inp)).join('')}</div></div>`;document.getElementById('toggle-sub-con').appendChild(div);}
+
+function collectToggleSubs(){return Array.from(document.querySelectorAll('#toggle-sub-con>.dyn-item')).map((_,i)=>({id:document.getElementById('togi-'+i)?.value.trim()||'sub'+i,label:document.getElementById('togl-'+i)?.value.trim()||'',textTemplate:document.getElementById('togt-'+i)?.value.trim()||'',defaultChecked:document.getElementById('togd-'+i)?.value==='true',inputs:collectSubInps(document.getElementById('tog-inp-'+i))})).filter((_,i)=>document.getElementById('togi-'+i));}
+
 function addOpt(d={}){const i=_oc++;const isCombo=document.getElementById('c-type').value==='combo';const div=document.createElement('div');div.className='dyn-item';const subsHtml=(d.subOptions||[]).map((s,j)=>subOptHtml('opt-sub-'+i,j,s)).join('');div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">選択肢 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>選択肢ID</label><input class="f-in" id="oi-${i}" value="${d.id||''}" placeholder="例: with_limit"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="ol-${i}" value="${d.label||''}" placeholder="例: 最大範囲を設定する"></div></div><div class="f-row"><label>条文テキスト</label><textarea class="f-ta" id="ot-${i}">${d.textTemplate||''}</textarea></div>${isCombo?`<div class="nested-sec"><div class="nested-ttl">入力フォーム項目 <button class="dyn-add" onclick="addSubInp('oinp-${i}')">＋</button></div><div id="oinp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('oinp-'+i,j,inp)).join('')}</div></div>`:''}<div class="nested-sec"><div class="nested-ttl">サブオプション <button class="dyn-add" onclick="addSubOpt('opt-sub-${i}')">＋</button></div><div id="opt-sub-${i}">${subsHtml}</div></div>`;document.getElementById('opt-con').appendChild(div);}
 
 function subInpHtml(prefix,j,d={}){return `<div class="dyn-item"><div class="dyn-hd"><span class="dyn-lbl">フォーム ${j+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>変数名</label><input class="f-in sinp-id" value="${d.id||''}" placeholder="例: z_max"></div><div class="f-row"><label>ラベル</label><input class="f-in sinp-label" value="${d.label||''}" placeholder="例: 許容量"></div><div class="f-row"><label>デフォルト値</label><input class="f-in sinp-default" type="number" value="${d.default??1}"></div><div class="f-row"><label>単位</label><input class="f-in sinp-unit" value="${d.unit||''}" placeholder="例: ブロック"></div></div></div>`;}
@@ -595,7 +604,7 @@ async function submitC(){
   const ttl=document.getElementById('c-ttl').value.trim();const type=document.getElementById('c-type').value;
   if(!ttl){toast('タイトルを入力してください','err');return;}
   const d={id:document.getElementById('c-id').value||'clause_'+Date.now(),title:ttl,type,order:parseInt(document.getElementById('c-ord').value)||0,defaultEnabled:document.getElementById('c-def').value==='true',chapterId:document.getElementById('c-chapter').value||''};
-  if(type==='toggle'){d.textTemplate=document.getElementById('c-toggle-txt').value.trim();}
+  if(type==='toggle'){d.textTemplate=document.getElementById('c-toggle-txt').value.trim();d.subOptions=collectToggleSubs();}
   else if(type==='num'){d.inputs=collectInps();d.textTemplate=document.getElementById('c-tmpl').value.trim();d.subOptions=collectTopSubs();}
   else{d.options=collectOpts();}
   if(await saveClause(d))closeCModal();
@@ -623,7 +632,7 @@ function renderPresetClauses(){
     }else{
       bodyHtml=(c.options||[]).map(opt=>{const sel=(cfg.selectedOption===opt.id)||(!cfg.selectedOption&&c.options[0]?.id===opt.id);let h=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="radio" name="popt-${c.id}" value="${opt.id}" ${sel?'checked':''} onchange="setPCfgOpt('${c.id}','${opt.id}')">${opt.label}</label></div>`;if(c.type==='combo'&&opt.inputs?.length&&sel){h+=(opt.inputs||[]).map(inp=>{const v=cfg[opt.id]?.[inp.id]??inp.default;return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 20px"><span style="font-size:12px;color:var(--dark);min-width:80px">${inp.label}</span><input class="f-in" type="number" style="width:80px;padding:3px 7px;font-size:13px" value="${v}" onchange="setPCfgOptInp('${c.id}','${opt.id}','${inp.id}',this.value)"><span style="font-size:11px;color:var(--dark)">${inp.unit||''}</span></div>`;}).join('');}return h;}).join('');
     }
-    const allSubs=c.type==='toggle'?[]:(c.type==='num'?(c.subOptions||[]):(c.options||[]).flatMap(o=>o.subOptions||[]));
+    const allSubs=(c.type==='toggle'||c.type==='num')?(c.subOptions||[]):(c.options||[]).flatMap(o=>o.subOptions||[]);
     if(allSubs.length){
       bodyHtml+=`<div style="margin-top:8px;font-size:11px;font-weight:700;color:var(--dark);text-transform:uppercase;letter-spacing:.05em;padding-top:6px;border-top:1px solid var(--mid)">サブオプション</div>`;
       allSubs.forEach(sub=>{const chk=cfg[sub.id]?.checked??sub.defaultChecked??false;bodyHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="checkbox" ${chk?'checked':''} onchange="setPCfgSub('${c.id}','${sub.id}',this.checked)">${sub.label}</label></div>`;if(sub.inputs?.length){sub.inputs.forEach(si=>{const v=cfg[sub.id]?.inputs?.[si.id]??si.default;bodyHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 22px"><span style="font-size:12px;color:var(--dark);min-width:80px">${si.label}</span><input class="f-in" type="number" style="width:80px;padding:3px 7px;font-size:13px" value="${v}" onchange="setPCfgSubInp('${c.id}','${sub.id}','${si.id}',this.value)"><span style="font-size:11px;color:var(--dark)">${si.unit||''}</span></div>`;});}});
