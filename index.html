@@ -5,35 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>模擬戦 レギュレーション作成フォーム</title>
 <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
-<script type="module">
-  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import{getFirestore,collection,getDocs}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  const db=getFirestore(initializeApp({apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"}));
-  window.addEventListener('DOMContentLoaded',async()=>{
+<!-- Firebase compat (グローバル変数として使用) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  const _fbApp = firebase.initializeApp({
+    apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",
+    authDomain:"regulation-creation-tool.firebaseapp.com",
+    projectId:"regulation-creation-tool",
+    storageBucket:"regulation-creation-tool.firebasestorage.app",
+    messagingSenderId:"743315732081",
+    appId:"1:743315732081:web:a2e78a376b403b15e80dd0"
+  });
+  const _db = firebase.firestore();
+
+  async function _loadData(){
     try{
       const[cs,ps]=await Promise.all([
-        getDocs(collection(db,'clauses')),
-        getDocs(collection(db,'presets'))
+        _db.collection('clauses').get(),
+        _db.collection('presets').get()
       ]);
       const cl=[];cs.forEach(d=>cl.push({id:d.id,...d.data()}));cl.sort((a,b)=>(a.order??0)-(b.order??0));
       const pr=[];ps.forEach(d=>pr.push({id:d.id,...d.data()}));
 
-      // chapters は後から追加されるため、未登録でもエラーにしない
       let ch=[];
       try{
-        const chs=await getDocs(collection(db,'chapters'));
+        const chs=await _db.collection('chapters').get();
         chs.forEach(d=>ch.push({id:d.id,...d.data()}));
         ch.sort((a,b)=>(a.order??0)-(b.order??0));
       }catch(_){}
 
-      // chaptersが未作成、またはchapterIdが設定されていない条文を救済
       if(!ch.length) ch=[{id:'__default__',title:'レギュレーション',order:0}];
       const validChIds=new Set(ch.map(x=>x.id));
       cl.forEach(c=>{
-        if(!c.chapterId||!validChIds.has(c.chapterId)){
-          // 未分類の条文は最初の章に割り当て
-          c.chapterId=ch[0].id;
-        }
+        if(!c.chapterId||!validChIds.has(c.chapterId)) c.chapterId=ch[0].id;
       });
 
       window._CL=cl;window._PR=pr;window._CH=ch;
@@ -45,7 +50,8 @@
       el.innerHTML='⚠ データの読み込みに失敗しました。<br><span style="font-size:11px;color:#888;margin-top:4px">'+e.message+'</span>';
     }
     document.getElementById('loading').style.display='none';
-  });
+  }
+  window.addEventListener('DOMContentLoaded', _loadData);
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap');
