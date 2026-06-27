@@ -211,14 +211,6 @@ body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-
 .guide h4:first-child{border-top:none;margin-top:0;padding-top:0;}
 .guide code{background:#ebebeb;border:1px solid var(--mid);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:12px;}
 .guide pre{background:#ebebeb;border:1px solid var(--mid);padding:10px 12px;border-radius:var(--r);font-size:11px;color:var(--dark);font-family:'JetBrains Mono',monospace;white-space:pre-wrap;margin-top:5px;line-height:1.8;}
-
-  /* タッチ操作最適化 */
-  button,label,.tog,.mini-tog,.opt-item,.sub-opt,.p-btn,.sb-reset,.tab,.preset-clause-row,.pc-expand{-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
-  .dh{touch-action:none;} /* ドラッグハンドルはスクロール無効 */
-  input[type=number]{font-size:16px;} /* iOS ズーム防止 */
-  input[type=text],input[type=number],.f-in,.f-ta,.f-sel{font-size:16px;} /* iOS ズーム防止 */
-  .ord-btn,.e-btn,.d-btn,.dyn-add,.dyn-rm,.add-btn,.sv-btn,.cn-btn{min-height:36px;} /* タッチターゲット拡大 */
-  .ord-btn{min-width:36px;}
 </style>
 </head>
 <body>
@@ -483,7 +475,6 @@ function renderClauses(){
 }
 
 function setupDragDrop(row,type,id){
-  // ── Mouse / Desktop drag ──
   row.addEventListener('dragstart',e=>{dragSrcId=id;dragType=type;row.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
   row.addEventListener('dragend',()=>{dragSrcId=null;dragType=null;row.classList.remove('dragging');document.querySelectorAll('.cl-row,.ch-row').forEach(r=>{r.classList.remove('drop-above','drop-below');});});
   row.addEventListener('dragover',e=>{
@@ -506,50 +497,6 @@ function setupDragDrop(row,type,id){
     else{window._ch=arr;renderChapters();saveChapterOrder(arr.map(x=>x.id));}
     dragSrcId=null;dragType=null;
   });
-  // ── Touch drag (iOS/Android) ──
-  const dh=row.querySelector('.dh');
-  if(!dh)return;
-  let _touchClone=null,_touchScrollLocked=false;
-  dh.addEventListener('touchstart',e=>{
-    dragSrcId=id;dragType=type;_touchScrollLocked=false;
-    const t=e.touches[0];
-    _touchClone=row.cloneNode(true);
-    _touchClone.style.cssText='position:fixed;z-index:9999;opacity:.8;pointer-events:none;width:'+row.offsetWidth+'px;left:'+row.getBoundingClientRect().left+'px;top:'+t.clientY+'px;';
-    document.body.appendChild(_touchClone);
-    row.classList.add('dragging');
-  },{passive:true});
-  dh.addEventListener('touchmove',e=>{
-    if(!dragSrcId)return;
-    e.preventDefault();_touchScrollLocked=true;
-    const t=e.touches[0];
-    if(_touchClone)_touchClone.style.top=(t.clientY-20)+'px';
-    const sel=type==='cl'?'.cl-row':'.ch-row';
-    document.querySelectorAll(sel).forEach(r=>{r.classList.remove('drop-above','drop-below');});
-    const el=document.elementFromPoint(t.clientX,t.clientY)?.closest(type==='cl'?'.cl-row':'.ch-row');
-    if(el&&el!==row){const rect=el.getBoundingClientRect();el.classList.add(t.clientY<rect.top+rect.height/2?'drop-above':'drop-below');}
-  },{passive:false});
-  dh.addEventListener('touchend',e=>{
-    if(_touchClone){_touchClone.remove();_touchClone=null;}
-    row.classList.remove('dragging');
-    if(!dragSrcId){return;}
-    const t=e.changedTouches[0];
-    const sel=type==='cl'?'.cl-row':'.ch-row';
-    document.querySelectorAll(sel).forEach(r=>{r.classList.remove('drop-above','drop-below');});
-    const target=document.elementFromPoint(t.clientX,t.clientY)?.closest(type==='cl'?'.cl-row':'.ch-row');
-    if(target&&target.id!==row.id){
-      const targetId=target.id.replace('cr-','').replace('chr-','');
-      const arr=type==='cl'?window._cl:window._ch;
-      const fi=arr.findIndex(x=>x.id===dragSrcId),ti=arr.findIndex(x=>x.id===targetId);
-      if(fi!==-1&&ti!==-1){
-        const rect=target.getBoundingClientRect();const above=t.clientY<rect.top+rect.height/2;
-        const[moved]=arr.splice(fi,1);const newTi=arr.findIndex(x=>x.id===targetId);
-        arr.splice(above?newTi:newTi+1,0,moved);
-        if(type==='cl'){window._cl=arr;renderClauses();saveOrder(arr.map(x=>x.id));}
-        else{window._ch=arr;renderChapters();saveChapterOrder(arr.map(x=>x.id));}
-      }
-    }
-    dragSrcId=null;dragType=null;
-  },{passive:true});
 }
 
 function renderPresets(){
@@ -588,9 +535,9 @@ async function submitCh(){
 }
 
 // ── Clause Modal ──────────────────────────────────────────────────────────────
-let _ic=0,_oc=0,_sc=0,_tsc=0; // _sc=num subs, _tsc=toggle subs
+let _ic=0,_oc=0,_sc=0;
 function openCModal(id){
-  _ic=0;_oc=0;_sc=0;_tsc=0;
+  _ic=0;_oc=0;_sc=0;
   document.getElementById('inp-con').innerHTML='';
   document.getElementById('opt-con').innerHTML='';
   document.getElementById('top-sub-con').innerHTML='';
@@ -630,82 +577,15 @@ function openCModal(id){
 function closeCModal(){document.getElementById('c-modal').classList.remove('open');}
 function onTypeChg(){const t=document.getElementById('c-type').value;document.getElementById('toggle-flds').style.display=t==='toggle'?'block':'none';document.getElementById('num-flds').style.display=t==='num'?'block':'none';document.getElementById('opt-flds').style.display=(t==='select'||t==='combo')?'block':'none';}
 
-function addInp(d={}){
-  const i=_ic++;
-  const div=document.createElement('div');div.className='dyn-item';
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">項目 '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>変数名</label><input class="f-in inp-id" value="'+(d.id||'')+'" placeholder="例: length"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in inp-label" value="'+(d.label||'')+'" placeholder="例: 全長"></div>'+
-      '<div class="f-row"><label>デフォルト値</label><input class="f-in inp-default" type="number" value="'+(d.default??1)+'"></div>'+
-      '<div class="f-row"><label>単位</label><input class="f-in inp-unit" value="'+(d.unit||'')+'" placeholder="例: ブロック"></div>'+
-    '</div>';
-  document.getElementById('inp-con').appendChild(div);
-}
+function addInp(d={}){const i=_ic++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">項目 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>変数名</label><input class="f-in" id="ii-${i}" value="${d.id||''}" placeholder="例: length"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="il-${i}" value="${d.label||''}" placeholder="例: 全長"></div><div class="f-row"><label>デフォルト値</label><input class="f-in" type="number" id="id-${i}" value="${d.default??1}"></div><div class="f-row"><label>単位</label><input class="f-in" id="iu-${i}" value="${d.unit||''}" placeholder="例: ブロック"></div></div>`;document.getElementById('inp-con').appendChild(div);}
 
-function addTopSub(d={}){
-  const i=_sc++;
-  const uid='ts-'+Date.now()+'-'+i;
-  const div=document.createElement('div');div.className='dyn-item';
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">サブオプション '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>ID</label><input class="f-in tsub-id" value="'+(d.id||'')+'" placeholder="例: z_overhang"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in tsub-label" value="'+(d.label||'')+'" placeholder="例: z軸はみ出し許容"></div>'+
-    '</div>'+
-    '<div class="f-row"><label>付加テキスト</label><textarea class="f-ta tsub-text">'+(d.textTemplate||'')+'</textarea></div>'+
-    '<div class="f-row"><label>デフォルト</label><select class="f-sel tsub-def" style="max-width:140px"><option value="false" '+(d.defaultChecked?'':'selected')+'>OFF</option><option value="true" '+(d.defaultChecked?'selected':'')+'>ON</option></select></div>'+
-    '<div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp(''+uid+'')">＋ 追加</button></div><div id="'+uid+'">'+(d.inputs||[]).map((inp,j)=>subInpHtml(uid,j,inp)).join('')+'</div></div>';
-  div.dataset.uid=uid;
-  document.getElementById('top-sub-con').appendChild(div);
-}
+function addTopSub(d={}){const i=_sc++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in" id="tsi-${i}" value="${d.id||''}" placeholder="例: z_overhang"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="tsl-${i}" value="${d.label||''}" placeholder="例: z軸はみ出し許容"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta" id="tst-${i}">${d.textTemplate||''}</textarea></div><div class="f-row"><label>デフォルト</label><select class="f-sel" id="tsd-${i}" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('ts-inp-${i}')">＋ 追加</button></div><div id="ts-inp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('ts-inp-'+i,j,inp)).join('')}</div></div>`;document.getElementById('top-sub-con').appendChild(div);}
 
-function addToggleSub(d={}){
-  const i=_tsc++;
-  const uid='tg-'+Date.now()+'-'+i;
-  const div=document.createElement('div');div.className='dyn-item';
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">サブオプション '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>ID</label><input class="f-in togsub-id" value="'+(d.id||'')+'" placeholder="例: extra_rule"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in togsub-label" value="'+(d.label||'')+'" placeholder="例: 追加ルールを適用する"></div>'+
-    '</div>'+
-    '<div class="f-row"><label>付加テキスト</label><textarea class="f-ta togsub-text">'+(d.textTemplate||'')+'</textarea></div>'+
-    '<div class="f-row"><label>デフォルト</label><select class="f-sel togsub-def" style="max-width:140px"><option value="false" '+(d.defaultChecked?'':'selected')+'>OFF</option><option value="true" '+(d.defaultChecked?'selected':'')+'>ON</option></select></div>'+
-    '<div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp(''+uid+'')">＋ 追加</button></div><div id="'+uid+'">'+(d.inputs||[]).map((inp,j)=>subInpHtml(uid,j,inp)).join('')+'</div></div>';
-  div.dataset.uid=uid;
-  document.getElementById('toggle-sub-con').appendChild(div);
-}
+function addToggleSub(d={}){const i=_sc++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in" id="togi-${i}" value="${d.id||''}" placeholder="例: extra_rule"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="togl-${i}" value="${d.label||''}" placeholder="例: 追加ルールを適用する"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta" id="togt-${i}">${d.textTemplate||''}</textarea></div><div class="f-row"><label>デフォルト</label><select class="f-sel" id="togd-${i}" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('tog-inp-${i}')">＋ 追加</button></div><div id="tog-inp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('tog-inp-'+i,j,inp)).join('')}</div></div>`;document.getElementById('toggle-sub-con').appendChild(div);}
 
-function collectToggleSubs(){
-  return Array.from(document.querySelectorAll('#toggle-sub-con>.dyn-item')).map((div,i)=>({
-    id:div.querySelector('.togsub-id')?.value.trim()||'sub'+i,
-    label:div.querySelector('.togsub-label')?.value.trim()||'',
-    textTemplate:div.querySelector('.togsub-text')?.value.trim()||'',
-    defaultChecked:div.querySelector('.togsub-def')?.value==='true',
-    inputs:collectSubInps(document.getElementById(div.dataset.uid))
-  })).filter(x=>x.id);
-}
+function collectToggleSubs(){return Array.from(document.querySelectorAll('#toggle-sub-con>.dyn-item')).map((_,i)=>({id:document.getElementById('togi-'+i)?.value.trim()||'sub'+i,label:document.getElementById('togl-'+i)?.value.trim()||'',textTemplate:document.getElementById('togt-'+i)?.value.trim()||'',defaultChecked:document.getElementById('togd-'+i)?.value==='true',inputs:collectSubInps(document.getElementById('tog-inp-'+i))})).filter((_,i)=>document.getElementById('togi-'+i));}
 
-function addOpt(d={}){
-  const i=_oc++;
-  const isCombo=document.getElementById('c-type').value==='combo';
-  const div=document.createElement('div');
-  div.className='dyn-item opt-item-row';
-  div.dataset.idx=i;
-  const subsHtml=(d.subOptions||[]).map((s,j)=>subOptHtml('opt-sub-'+i,j,s)).join('');
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">選択肢 '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>選択肢ID</label><input class="f-in opt-id" value="'+(d.id||'')+'" placeholder="例: with_limit"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in opt-label" value="'+(d.label||'')+'" placeholder="例: 最大範囲を設定する"></div>'+
-    '</div>'+
-    '<div class="f-row"><label>条文テキスト</label><textarea class="f-ta opt-text">'+(d.textTemplate||'')+'</textarea></div>'+
-    (isCombo?'<div class="nested-sec"><div class="nested-ttl">入力フォーム項目 <button class="dyn-add" onclick="addSubInp('oinp-'+i+'')">＋ 追加</button></div><div id="oinp-'+i+'">'+(d.inputs||[]).map((inp,j)=>subInpHtml('oinp-'+i,j,inp)).join('')+'</div></div>':'')+
-    '<div class="nested-sec"><div class="nested-ttl">サブオプション <button class="dyn-add" onclick="addSubOpt('opt-sub-'+i+'')">＋ 追加</button></div><div id="opt-sub-'+i+'">'+subsHtml+'</div></div>';
-  document.getElementById('opt-con').appendChild(div);
-}
+function addOpt(d={}){const i=_oc++;const isCombo=document.getElementById('c-type').value==='combo';const div=document.createElement('div');div.className='dyn-item';const subsHtml=(d.subOptions||[]).map((s,j)=>subOptHtml('opt-sub-'+i,j,s)).join('');div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">選択肢 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>選択肢ID</label><input class="f-in" id="oi-${i}" value="${d.id||''}" placeholder="例: with_limit"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="ol-${i}" value="${d.label||''}" placeholder="例: 最大範囲を設定する"></div></div><div class="f-row"><label>条文テキスト</label><textarea class="f-ta" id="ot-${i}">${d.textTemplate||''}</textarea></div>${isCombo?`<div class="nested-sec"><div class="nested-ttl">入力フォーム項目 <button class="dyn-add" onclick="addSubInp('oinp-${i}')">＋ 追加</button></div><div id="oinp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('oinp-'+i,j,inp)).join('')}</div></div>`:''}<div class="nested-sec"><div class="nested-ttl">サブオプション <button class="dyn-add" onclick="addSubOpt('opt-sub-${i}')">＋ 追加</button></div><div id="opt-sub-${i}">${subsHtml}</div></div>`;document.getElementById('opt-con').appendChild(div);}
 
 function subInpHtml(prefix,j,d={}){return `<div class="dyn-item"><div class="dyn-hd"><span class="dyn-lbl">フォーム ${j+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>変数名</label><input class="f-in sinp-id" value="${d.id||''}" placeholder="例: z_max"></div><div class="f-row"><label>ラベル</label><input class="f-in sinp-label" value="${d.label||''}" placeholder="例: 許容量"></div><div class="f-row"><label>デフォルト値</label><input class="f-in sinp-default" type="number" value="${d.default??1}"></div><div class="f-row"><label>単位</label><input class="f-in sinp-unit" value="${d.unit||''}" placeholder="例: ブロック"></div></div></div>`;}
 
@@ -714,39 +594,11 @@ function subOptHtml(prefix,j,d={}){const subInps=(d.inputs||[]).map((inp,k)=>sub
 function addSubInp(cid){const con=document.getElementById(cid);if(!con)return;const j=con.querySelectorAll(':scope>.dyn-item').length;con.insertAdjacentHTML('beforeend',subInpHtml(cid,j));}
 function addSubOpt(cid){const con=document.getElementById(cid);if(!con)return;const j=con.querySelectorAll(':scope>.dyn-item').length;con.insertAdjacentHTML('beforeend',subOptHtml(cid,j));}
 
-function collectInps(){
-  return Array.from(document.querySelectorAll('#inp-con>.dyn-item')).map((div,i)=>({
-    id:div.querySelector('.inp-id')?.value.trim()||'f'+i,
-    label:div.querySelector('.inp-label')?.value.trim()||'',
-    default:parseFloat(div.querySelector('.inp-default')?.value)||0,
-    unit:div.querySelector('.inp-unit')?.value.trim()||''
-  })).filter(x=>x.id);
-}
-function collectTopSubs(){
-  return Array.from(document.querySelectorAll('#top-sub-con>.dyn-item')).map((div,i)=>({
-    id:div.querySelector('.tsub-id')?.value.trim()||'sub'+i,
-    label:div.querySelector('.tsub-label')?.value.trim()||'',
-    textTemplate:div.querySelector('.tsub-text')?.value.trim()||'',
-    defaultChecked:div.querySelector('.tsub-def')?.value==='true',
-    inputs:collectSubInps(document.getElementById(div.dataset.uid))
-  })).filter(x=>x.id);
-}
+function collectInps(){return Array.from(document.querySelectorAll('#inp-con>.dyn-item')).map((_,i)=>({id:document.getElementById('ii-'+i)?.value.trim()||'f'+i,label:document.getElementById('il-'+i)?.value.trim()||'',default:parseFloat(document.getElementById('id-'+i)?.value)||0,unit:document.getElementById('iu-'+i)?.value.trim()||''})).filter((_,i)=>document.getElementById('ii-'+i));}
+function collectTopSubs(){return Array.from(document.querySelectorAll('#top-sub-con>.dyn-item')).map((_,i)=>({id:document.getElementById('tsi-'+i)?.value.trim()||'sub'+i,label:document.getElementById('tsl-'+i)?.value.trim()||'',textTemplate:document.getElementById('tst-'+i)?.value.trim()||'',defaultChecked:document.getElementById('tsd-'+i)?.value==='true',inputs:collectSubInps(document.getElementById('ts-inp-'+i))})).filter((_,i)=>document.getElementById('tsi-'+i));}
 function collectSubInps(con){if(!con)return[];return Array.from(con.querySelectorAll(':scope>.dyn-item')).map(item=>({id:item.querySelector('.sinp-id')?.value.trim()||'',label:item.querySelector('.sinp-label')?.value.trim()||'',default:parseFloat(item.querySelector('.sinp-default')?.value)||0,unit:item.querySelector('.sinp-unit')?.value.trim()||''})).filter(x=>x.id);}
 function collectSubOpts(con){if(!con)return[];return Array.from(con.querySelectorAll(':scope>.dyn-item')).map((item,j)=>({id:item.querySelector('.sub-id')?.value.trim()||'sub'+j,label:item.querySelector('.sub-label')?.value.trim()||'',textTemplate:item.querySelector('.sub-text')?.value.trim()||'',defaultChecked:item.querySelector('.sub-def')?.value==='true',inputs:collectSubInps(item.querySelector('[id$="-inp"]'))})).filter(x=>x.id);}
-function collectOpts(){
-  const isC=document.getElementById('c-type').value==='combo';
-  return Array.from(document.querySelectorAll('#opt-con>.dyn-item')).map((div,i)=>{
-    const idx=div.dataset.idx??i;
-    const o={
-      id:div.querySelector('.opt-id')?.value.trim()||'o'+i,
-      label:div.querySelector('.opt-label')?.value.trim()||'',
-      textTemplate:div.querySelector('.opt-text')?.value.trim()||'',
-      subOptions:collectSubOpts(document.getElementById('opt-sub-'+idx))
-    };
-    if(isC)o.inputs=collectSubInps(document.getElementById('oinp-'+idx));
-    return o;
-  }).filter(o=>o.id);
-}
+function collectOpts(){const isC=document.getElementById('c-type').value==='combo';return Array.from(document.querySelectorAll('#opt-con>.dyn-item')).map((_,i)=>{const o={id:document.getElementById('oi-'+i)?.value.trim()||'o'+i,label:document.getElementById('ol-'+i)?.value.trim()||'',textTemplate:document.getElementById('ot-'+i)?.value.trim()||'',subOptions:collectSubOpts(document.getElementById('opt-sub-'+i))};if(isC)o.inputs=collectSubInps(document.getElementById('oinp-'+i));return o;}).filter((_,i)=>document.getElementById('oi-'+i));}
 
 async function submitC(){
   const ttl=document.getElementById('c-ttl').value.trim();const type=document.getElementById('c-type').value;
