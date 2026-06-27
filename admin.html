@@ -4,62 +4,86 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>管理者パネル – 模擬戦レギュレーション</title>
-<script type="module">
-  import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import{getAuth,signInWithPopup,GoogleAuthProvider,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import{getFirestore,collection,getDocs,doc,setDoc,deleteDoc,writeBatch,serverTimestamp,getDoc}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  const cfg={apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"};
-  const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),prov=new GoogleAuthProvider();
-
-  window.loginWithGoogle=async()=>{try{await signInWithPopup(auth,prov);}catch(e){if(e.code!=='auth/popup-closed-by-user')toast('ログインに失敗: '+e.message,'err');}};
-  window.logout=async()=>{await signOut(auth);};
-
-  onAuthStateChanged(auth,async user=>{
-    if(!user){show('login');return;}
-    show('loading');
-    try{
-      const d=await getDoc(doc(db,'admins',user.email));
-      const ok=d.exists()&&d.data().role==='admin';
-      if(ok){
-        document.getElementById('u-name').textContent=user.displayName||user.email;
-        document.getElementById('u-av').src=user.photoURL||'';
-        show('admin');toast((user.displayName||user.email)+'としてログインしました','ok');loadAll();
-      }else{await signOut(auth);show('login');toast('管理者権限がありません','err');}
-    }catch(e){await signOut(auth);show('login');toast('確認に失敗: '+e.message,'err');}
+<!-- Firebase compat -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script>
+  firebase.initializeApp({
+    apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",
+    authDomain:"regulation-creation-tool.firebaseapp.com",
+    projectId:"regulation-creation-tool",
+    storageBucket:"regulation-creation-tool.firebasestorage.app",
+    messagingSenderId:"743315732081",
+    appId:"1:743315732081:web:a2e78a376b403b15e80dd0"
   });
+  const _auth = firebase.auth();
+  const _db   = firebase.firestore();
+  const _prov = new firebase.auth.GoogleAuthProvider();
 
   function show(s){
-    document.getElementById('login-screen').style.display=s==='login'?'flex':'none';
-    document.getElementById('loading-screen').style.display=s==='loading'?'flex':'none';
-    document.getElementById('admin-screen').style.display=s==='admin'?'block':'none';
+    document.getElementById('login-screen').style.display  = s==='login'  ? 'flex'  : 'none';
+    document.getElementById('loading-screen').style.display= s==='loading' ? 'flex'  : 'none';
+    document.getElementById('admin-screen').style.display  = s==='admin'   ? 'block' : 'none';
   }
 
   async function loadAll(){
     try{
-      const[cs,ps]=await Promise.all([
-        getDocs(collection(db,'clauses')),
-        getDocs(collection(db,'presets'))
+      const [cs,ps] = await Promise.all([
+        _db.collection('clauses').get(),
+        _db.collection('presets').get()
       ]);
       window._cl=[];cs.forEach(d=>window._cl.push({id:d.id,...d.data()}));window._cl.sort((a,b)=>(a.order??0)-(b.order??0));
       window._pr=[];ps.forEach(d=>window._pr.push({id:d.id,...d.data()}));
       window._ch=[];
       try{
-        const chs=await getDocs(collection(db,'chapters'));
-        chs.forEach(d=>window._ch.push({id:d.id,...d.data()}));window._ch.sort((a,b)=>(a.order??0)-(b.order??0));
+        const chs = await _db.collection('chapters').get();
+        chs.forEach(d=>window._ch.push({id:d.id,...d.data()}));
+        window._ch.sort((a,b)=>(a.order??0)-(b.order??0));
       }catch(_){}
       renderChapters();renderClauses();renderPresets();
     }catch(e){toast('読み込みエラー: '+e.message,'err');}
   }
 
-  window.saveClause=async d=>{try{await setDoc(doc(db,'clauses',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');await loadAll();return true;}catch(e){toast('保存エラー: '+e.message,'err');return false;}};
-  window.deleteClause=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'clauses',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
-  window.saveOrder=async ids=>{try{const b=writeBatch(db);ids.forEach((id,i)=>b.update(doc(db,'clauses',id),{order:i}));await b.commit();toast('順序を保存しました');}catch(e){toast('順序保存エラー','err');}};
-  window.saveChapter=async d=>{try{await setDoc(doc(db,'chapters',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');await loadAll();return true;}catch(e){toast('保存エラー: '+e.message,'err');return false;}};
-  window.deleteChapter=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'chapters',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
-  window.saveChapterOrder=async ids=>{try{const b=writeBatch(db);ids.forEach((id,i)=>b.update(doc(db,'chapters',id),{order:i}));await b.commit();toast('順序を保存しました');}catch(e){toast('順序保存エラー','err');}};
-  window.savePreset=async d=>{try{await setDoc(doc(db,'presets',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');loadAll();}catch(e){toast('保存エラー','err');}};
-  window.deletePreset=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'presets',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
-  window._loadAll=loadAll;
+  window.loginWithGoogle = async()=>{
+    try{ await _auth.signInWithPopup(_prov); }
+    catch(e){ if(e.code!=='auth/popup-closed-by-user') toast('ログインに失敗: '+e.message,'err'); }
+  };
+  window.logout = async()=>{ await _auth.signOut(); };
+
+  _auth.onAuthStateChanged(async user=>{
+    if(!user){show('login');return;}
+    show('loading');
+    try{
+      const d = await _db.collection('admins').doc(user.email).get();
+      const ok = d.exists && d.data().role==='admin';
+      if(ok){
+        document.getElementById('u-name').textContent = user.displayName||user.email;
+        document.getElementById('u-av').src = user.photoURL||'';
+        show('admin');
+        toast((user.displayName||user.email)+'としてログインしました','ok');
+        loadAll();
+      }else{
+        await _auth.signOut();
+        show('login');
+        toast('管理者権限がありません','err');
+      }
+    }catch(e){
+      await _auth.signOut();
+      show('login');
+      toast('確認に失敗: '+e.message,'err');
+    }
+  });
+
+  window.saveClause    = async d=>{try{await _db.collection('clauses').doc(d.id).set({...d,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('保存しました');await loadAll();return true;}catch(e){toast('保存エラー: '+e.message,'err');return false;}};
+  window.deleteClause  = async id=>{if(!confirm('削除しますか？'))return;try{await _db.collection('clauses').doc(id).delete();toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window.saveOrder     = async ids=>{try{const b=_db.batch();ids.forEach((id,i)=>b.update(_db.collection('clauses').doc(id),{order:i}));await b.commit();toast('順序を保存しました');}catch(e){toast('順序保存エラー','err');}};
+  window.saveChapter   = async d=>{try{await _db.collection('chapters').doc(d.id).set({...d,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('保存しました');await loadAll();return true;}catch(e){toast('保存エラー: '+e.message,'err');return false;}};
+  window.deleteChapter = async id=>{if(!confirm('削除しますか？'))return;try{await _db.collection('chapters').doc(id).delete();toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window.saveChapterOrder = async ids=>{try{const b=_db.batch();ids.forEach((id,i)=>b.update(_db.collection('chapters').doc(id),{order:i}));await b.commit();toast('順序を保存しました');}catch(e){toast('順序保存エラー','err');}};
+  window.savePreset    = async d=>{try{await _db.collection('presets').doc(d.id).set({...d,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});toast('保存しました');loadAll();}catch(e){toast('保存エラー','err');}};
+  window.deletePreset  = async id=>{if(!confirm('削除しますか？'))return;try{await _db.collection('presets').doc(id).delete();toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window._loadAll = loadAll;
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap');
