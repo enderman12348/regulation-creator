@@ -26,11 +26,15 @@
         ch.sort((a,b)=>(a.order??0)-(b.order??0));
       }catch(_){}
 
-      // chapters がまだ作られていない場合はダミー章で全条文を表示
-      if(!ch.length&&cl.length){
-        ch=[{id:'__default__',title:'レギュレーション',order:0}];
-        cl.forEach(c=>{ if(!c.chapterId) c.chapterId='__default__'; });
-      }
+      // chaptersが未作成、またはchapterIdが設定されていない条文を救済
+      if(!ch.length) ch=[{id:'__default__',title:'レギュレーション',order:0}];
+      const validChIds=new Set(ch.map(x=>x.id));
+      cl.forEach(c=>{
+        if(!c.chapterId||!validChIds.has(c.chapterId)){
+          // 未分類の条文は最初の章に割り当て
+          c.chapterId=ch[0].id;
+        }
+      });
 
       window._CL=cl;window._PR=pr;window._CH=ch;
       initState();renderSidebar();renderAll();
