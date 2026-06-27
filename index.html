@@ -3,47 +3,63 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>模擬戦 レギュレーション作成フォーム</title>
-<script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+<title>管理者パネル – 模擬戦レギュレーション</title>
 <script type="module">
   import{initializeApp}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import{getFirestore,collection,getDocs}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-  const db=getFirestore(initializeApp({apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"}));
-  window.addEventListener('DOMContentLoaded',async()=>{
+  import{getAuth,signInWithPopup,GoogleAuthProvider,signOut,onAuthStateChanged}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import{getFirestore,collection,getDocs,doc,setDoc,deleteDoc,writeBatch,serverTimestamp,getDoc}from"https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+  const cfg={apiKey:"AIzaSyBQm14-Bn7YAS_UJlVJ_9m_FJN5RIyr78A",authDomain:"regulation-creation-tool.firebaseapp.com",projectId:"regulation-creation-tool",storageBucket:"regulation-creation-tool.firebasestorage.app",messagingSenderId:"743315732081",appId:"1:743315732081:web:a2e78a376b403b15e80dd0"};
+  const app=initializeApp(cfg),auth=getAuth(app),db=getFirestore(app),prov=new GoogleAuthProvider();
+
+  window.loginWithGoogle=async()=>{try{await signInWithPopup(auth,prov);}catch(e){if(e.code!=='auth/popup-closed-by-user')toast('ログインに失敗: '+e.message,'err');}};
+  window.logout=async()=>{await signOut(auth);};
+
+  onAuthStateChanged(auth,async user=>{
+    if(!user){show('login');return;}
+    show('loading');
+    try{
+      const d=await getDoc(doc(db,'admins',user.email));
+      const ok=d.exists()&&d.data().role==='admin';
+      if(ok){
+        document.getElementById('u-name').textContent=user.displayName||user.email;
+        document.getElementById('u-av').src=user.photoURL||'';
+        show('admin');toast((user.displayName||user.email)+'としてログインしました','ok');loadAll();
+      }else{await signOut(auth);show('login');toast('管理者権限がありません','err');}
+    }catch(e){await signOut(auth);show('login');toast('確認に失敗: '+e.message,'err');}
+  });
+
+  function show(s){
+    document.getElementById('login-screen').style.display=s==='login'?'flex':'none';
+    document.getElementById('loading-screen').style.display=s==='loading'?'flex':'none';
+    document.getElementById('admin-screen').style.display=s==='admin'?'block':'none';
+  }
+
+  async function loadAll(){
     try{
       const[cs,ps]=await Promise.all([
         getDocs(collection(db,'clauses')),
         getDocs(collection(db,'presets'))
       ]);
-      const cl=[];cs.forEach(d=>cl.push({id:d.id,...d.data()}));cl.sort((a,b)=>(a.order??0)-(b.order??0));
-      const pr=[];ps.forEach(d=>pr.push({id:d.id,...d.data()}));
-
-      // chapters は後から追加されるため、未登録でもエラーにしない
-      let ch=[];
+      window._cl=[];cs.forEach(d=>window._cl.push({id:d.id,...d.data()}));window._cl.sort((a,b)=>(a.order??0)-(b.order??0));
+      window._pr=[];ps.forEach(d=>window._pr.push({id:d.id,...d.data()}));
+      window._ch=[];
       try{
         const chs=await getDocs(collection(db,'chapters'));
-        chs.forEach(d=>ch.push({id:d.id,...d.data()}));
-        ch.sort((a,b)=>(a.order??0)-(b.order??0));
+        chs.forEach(d=>window._ch.push({id:d.id,...d.data()}));window._ch.sort((a,b)=>(a.order??0)-(b.order??0));
       }catch(_){}
+      renderChapters();renderClauses();renderPresets();
+    }catch(e){toast('読み込みエラー: '+e.message,'err');}
+  }
 
-      // chaptersが未作成、またはchapterIdが設定されていない条文を救済
-      if(!ch.length) ch=[{id:'__default__',title:'レギュレーション',order:0}];
-      const validChIds=new Set(ch.map(x=>x.id));
-      cl.forEach(c=>{
-        if(!c.chapterId||!validChIds.has(c.chapterId)){
-          // 未分類の条文は最初の章に割り当て
-          c.chapterId=ch[0].id;
-        }
-      });
-
-      window._CL=cl;window._PR=pr;window._CH=ch;
-      initState();renderSidebar();renderAll();
-    }catch(e){
-      console.error(e);
-      document.getElementById('load-error').style.display='flex';
-    }
-    document.getElementById('loading').style.display='none';
-  });
+  window.saveClause=async d=>{try{await setDoc(doc(db,'clauses',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');await loadAll();return true;}catch(e){toast('保存エラー: '+e.message,'err');return false;}};
+  window.deleteClause=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'clauses',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window.saveOrder=async ids=>{try{const b=writeBatch(db);ids.forEach((id,i)=>b.update(doc(db,'clauses',id),{order:i}));await b.commit();toast('順序を保存しました');}catch(e){toast('順序保存エラー','err');}};
+  window.saveChapter=async d=>{try{await setDoc(doc(db,'chapters',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');await loadAll();return true;}catch(e){toast('保存エラー: '+e.message,'err');return false;}};
+  window.deleteChapter=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'chapters',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window.saveChapterOrder=async ids=>{try{const b=writeBatch(db);ids.forEach((id,i)=>b.update(doc(db,'chapters',id),{order:i}));await b.commit();toast('順序を保存しました');}catch(e){toast('順序保存エラー','err');}};
+  window.savePreset=async d=>{try{await setDoc(doc(db,'presets',d.id),{...d,updatedAt:serverTimestamp()});toast('保存しました');loadAll();}catch(e){toast('保存エラー','err');}};
+  window.deletePreset=async id=>{if(!confirm('削除しますか？'))return;try{await deleteDoc(doc(db,'presets',id));toast('削除しました');loadAll();}catch(e){toast('削除エラー','err');}};
+  window._loadAll=loadAll;
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap');
@@ -56,394 +72,594 @@
   --blue-bg:#eff6ff;
   --red:#dc2626;
   --red-bg:#fef2f2;
+  --green:#16a34a;
+  --green-bg:#f0fdf4;
   --r:4px;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--white);color:var(--black);font-family:'Noto Sans JP',sans-serif;font-size:14px;line-height:1.6;min-height:100vh;}
 
-#loading{position:fixed;inset:0;background:var(--white);z-index:300;display:flex;align-items:center;justify-content:center;gap:10px;color:var(--dark);font-size:13px;}
-#load-error{display:none;position:fixed;inset:0;background:var(--white);z-index:300;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:var(--red);font-size:13px;}
-.spin{width:16px;height:16px;border:2px solid var(--mid);border-top-color:var(--dark);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;}
+#login-screen,#loading-screen{position:fixed;inset:0;background:var(--white);z-index:300;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+.login-card{background:var(--white);border:1px solid var(--mid);border-radius:8px;padding:40px 48px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:16px;box-shadow:0 4px 24px rgba(0,0,0,.1);max-width:340px;width:90%;}
+.login-card h2{font-size:17px;font-weight:700;}
+.login-card p{font-size:13px;color:var(--dark);line-height:1.7;}
+.g-btn{background:var(--white);color:var(--black);border:1px solid var(--mid);padding:9px 18px;border-radius:var(--r);font-size:13px;cursor:pointer;display:flex;align-items:center;gap:9px;font-weight:500;transition:.12s;font-family:'Noto Sans JP',sans-serif;}
+.g-btn:hover{background:#f5f5f5;}
+.g-btn img{width:16px;height:16px;}
+.spin{width:18px;height:18px;border:2px solid var(--mid);border-top-color:var(--dark);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.app{display:grid;grid-template-columns:196px 1fr;grid-template-rows:44px 1fr;min-height:100vh;}
+#toast{position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-8px);z-index:600;padding:9px 18px;border-radius:var(--r);font-size:13px;font-weight:500;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.15);opacity:0;transition:opacity .22s,transform .22s;pointer-events:none;border:1px solid var(--mid);}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+#toast.ok{background:var(--green-bg);color:var(--green);border-color:#86efac;}
+#toast.err{background:var(--red-bg);color:var(--red);border-color:#fca5a5;}
 
-.topbar{grid-column:1/-1;border-bottom:1px solid var(--mid);display:flex;align-items:center;padding:0 18px;gap:8px;background:var(--white);position:sticky;top:0;z-index:50;}
-.t-logo{font-size:13px;font-weight:700;color:var(--black);}
-.t-sep{color:var(--mid);font-size:12px;}
-.t-sub{font-size:12px;color:var(--dark);}
-.t-right{margin-left:auto;}
-.t-link{font-size:12px;color:var(--dark);text-decoration:none;padding:3px 9px;border-radius:var(--r);border:1px solid var(--mid);transition:background .1s;}
-.t-link:hover{background:var(--mid);color:var(--black);}
+.topbar{border-bottom:1px solid var(--mid);height:44px;display:flex;align-items:center;padding:0 18px;gap:8px;background:var(--white);position:sticky;top:0;z-index:50;}
+.t-logo{font-size:13px;font-weight:700;}
+.t-sep{color:var(--mid);}
+.badge{font-size:10px;font-weight:700;background:var(--red-bg);color:var(--red);padding:1px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace;border:1px solid #fca5a5;}
+.t-right{margin-left:auto;display:flex;align-items:center;gap:6px;}
+.u-info{display:flex;align-items:center;gap:7px;}
+#u-av{width:24px;height:24px;border-radius:50%;border:1px solid var(--mid);}
+#u-name{font-size:12px;color:var(--dark);}
+.t-link{font-size:12px;color:var(--dark);text-decoration:none;padding:3px 9px;border-radius:var(--r);border:1px solid var(--mid);transition:.1s;}
+.t-link:hover{background:#f5f5f5;}
+.t-logout{font-size:12px;color:var(--dark);background:none;border:1px solid var(--mid);cursor:pointer;padding:3px 9px;border-radius:var(--r);font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.t-logout:hover{background:var(--red-bg);color:var(--red);border-color:#fca5a5;}
 
-.sidebar{border-right:1px solid var(--mid);padding:12px 8px;display:flex;flex-direction:column;gap:1px;background:var(--white);overflow-y:auto;}
-.sb-lbl{font-size:10px;font-weight:700;color:var(--dark);letter-spacing:.08em;text-transform:uppercase;padding:8px 8px 3px;border-top:1px solid var(--mid);margin-top:6px;}
-.sb-lbl:first-child{border-top:none;margin-top:0;padding-top:4px;}
-.p-btn{width:100%;background:none;border:none;color:var(--dark);padding:5px 8px;border-radius:var(--r);cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:13px;text-align:left;transition:background .1s,color .1s;display:flex;flex-direction:column;}
-.p-btn:hover{background:var(--mid);color:var(--black);}
-.p-btn.active{background:var(--blue);color:var(--white);}
-.p-btn .pd{font-size:11px;opacity:.7;}
-.sb-hr{border:none;border-top:1px solid var(--mid);margin:6px 8px;}
-.sb-reset{width:100%;background:none;border:none;color:var(--dark);padding:5px 8px;border-radius:var(--r);cursor:pointer;font-size:12px;text-align:left;transition:background .1s;font-family:'Noto Sans JP',sans-serif;}
-.sb-reset:hover{background:var(--mid);}
+.wrap{max-width:820px;margin:0 auto;padding:28px;}
+.tabs{display:flex;border-bottom:1px solid var(--mid);margin-bottom:22px;}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--dark);padding:8px 14px;font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-weight:500;transition:.12s;margin-bottom:-1px;}
+.tab:hover{color:var(--black);}
+.tab.on{color:var(--blue);border-bottom-color:var(--blue);}
+.tp{display:none;}.tp.on{display:block;}
 
-.main{padding:32px 40px;overflow-y:auto;max-width:780px;}
-.page-h{font-size:21px;font-weight:700;margin-bottom:3px;letter-spacing:-.02em;}
-.page-sub{font-size:13px;color:var(--dark);margin-bottom:26px;}
+.s-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.s-ttl{font-size:13px;font-weight:700;color:var(--dark);}
+.s-hint{font-size:11px;font-weight:400;color:var(--mid);margin-left:6px;}
+.add-btn{background:var(--black);color:var(--white);border:none;padding:5px 13px;border-radius:var(--r);cursor:pointer;font-size:13px;font-family:'Noto Sans JP',sans-serif;font-weight:600;transition:.12s;}
+.add-btn:hover{background:#333;}
 
-/* Chapter */
-.ch-section{margin-bottom:28px;}
-.ch-title{font-size:18px;font-weight:700;color:var(--black);margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid var(--black);}
+.cl-list,.ch-list{display:flex;flex-direction:column;gap:3px;}
+.cl-row,.ch-row{background:var(--white);border:1px solid var(--mid);border-radius:var(--r);padding:10px 12px;display:flex;align-items:center;gap:10px;transition:border-color .1s;position:relative;}
+.cl-row:hover,.ch-row:hover{border-color:var(--dark);}
+.cl-row.dragging,.ch-row.dragging{opacity:.3;border-style:dashed;}
+.cl-row.drop-above::before,.ch-row.drop-above::before{content:'';position:absolute;top:-2px;left:0;right:0;height:2px;background:var(--blue);border-radius:2px;}
+.cl-row.drop-below::after,.ch-row.drop-below::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:var(--blue);border-radius:2px;}
+.dh{color:var(--mid);font-size:16px;cursor:grab;user-select:none;padding:2px 3px;border-radius:3px;transition:.1s;flex-shrink:0;}
+.dh:hover{color:var(--dark);background:#f5f5f5;}
+.dh:active{cursor:grabbing;}
+.cl-info,.ch-info{flex:1;min-width:0;}
+.cl-name,.ch-name{font-size:13px;font-weight:500;display:flex;align-items:center;gap:6px;}
+.cl-meta,.ch-meta{font-size:11px;color:var(--dark);margin-top:1px;}
+.row-acts{display:flex;gap:4px;flex-shrink:0;align-items:center;}
 
-/* Clause card */
-.c-card{border:1px solid var(--mid);border-radius:var(--r);margin-bottom:5px;background:var(--white);transition:opacity .2s;}
-.c-card.on{border-left:3px solid var(--black);}
-.c-card.off{opacity:.38;}
-.c-hd{display:flex;align-items:center;gap:9px;padding:10px 12px;}
-.tog{position:relative;width:30px;height:16px;flex-shrink:0;cursor:pointer;}
-.tog input{opacity:0;width:0;height:0;}
-.tog-sl{position:absolute;inset:0;background:var(--mid);border-radius:16px;transition:background .15s;}
-.tog-sl::before{content:'';position:absolute;width:10px;height:10px;left:3px;top:3px;background:var(--white);border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25);}
-.tog input:checked+.tog-sl{background:var(--black);}
-.tog input:checked+.tog-sl::before{transform:translateX(14px);}
-.c-num{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--dark);min-width:22px;}
-.c-ttl{font-size:14px;font-weight:500;flex:1;}
-.c-body{padding:0 12px 12px 42px;display:flex;flex-direction:column;gap:8px;}
-.c-body.hide{display:none;}
+.ord-btn{background:none;border:1px solid var(--mid);color:var(--dark);width:28px;height:28px;border-radius:var(--r);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:.1s;line-height:1;}
+.ord-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-bg);}
+.ord-btn:disabled{opacity:.3;cursor:not-allowed;}
 
-.num-group{border:1px solid var(--mid);border-radius:var(--r);overflow:hidden;}
-.num-row{display:flex;align-items:center;padding:8px 12px;gap:10px;border-bottom:1px solid var(--mid);background:var(--white);}
-.num-row:last-child{border-bottom:none;}
-.num-row:focus-within{background:#f5f5f5;}
-.n-lbl{font-size:13px;color:var(--dark);min-width:80px;flex-shrink:0;}
-.n-inp{background:var(--white);border:1px solid var(--mid);color:var(--black);padding:4px 9px;border-radius:var(--r);width:88px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;text-align:right;transition:border-color .12s;}
-.n-inp:focus{outline:none;border-color:var(--dark);}
-.n-unit{font-size:12px;color:var(--dark);}
+.e-btn{background:none;border:1px solid var(--mid);color:var(--dark);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.e-btn:hover{border-color:var(--blue);color:var(--blue);}
+.d-btn{background:none;border:1px solid var(--mid);color:var(--dark);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.d-btn:hover{border-color:var(--red);color:var(--red);}
 
-.sub-group{display:flex;flex-direction:column;gap:4px;margin-top:4px;}
+.tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:1px 5px;border-radius:3px;border:1px solid;}
+.tag-n{background:var(--blue-bg);color:var(--blue);border-color:#93c5fd;}
+.tag-s{background:var(--green-bg);color:var(--green);border-color:#86efac;}
+.tag-c{background:#fffbeb;color:#c17d10;border-color:#fcd34d;}
+.tag-t{background:#e0e7ff;color:#4f46e5;border-color:#a5b4fc;}
 
-.opt-group{display:flex;flex-direction:column;gap:4px;}
-.opt-item{display:flex;align-items:flex-start;gap:9px;padding:9px 11px;background:var(--white);border:1px solid var(--mid);border-radius:var(--r);cursor:pointer;transition:border-color .1s,background .1s;}
-.opt-item:hover{background:#f5f5f5;}
-.opt-item.sel{border-color:var(--black);background:#f5f5f5;}
-.rdot{width:14px;height:14px;border-radius:50%;border:2px solid var(--mid);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;transition:border-color .1s;}
-.opt-item.sel .rdot{border-color:var(--black);}
-.rdot::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--black);opacity:0;transition:opacity .1s;}
-.opt-item.sel .rdot::after{opacity:1;}
-.o-txt{font-size:13px;color:var(--black);flex:1;line-height:1.5;}
-.o-inputs{margin-top:8px;}
+.pr-card{background:var(--white);border:1px solid var(--mid);border-radius:var(--r);padding:11px 12px;display:flex;align-items:center;gap:11px;margin-bottom:3px;transition:border-color .1s;}
+.pr-card:hover{border-color:var(--dark);}
+.pr-info{flex:1;}
+.pr-name{font-size:13px;font-weight:600;}
+.pr-desc{font-size:12px;color:var(--dark);margin-top:1px;}
 
-.sub-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--white);border:1px solid var(--mid);border-radius:var(--r);cursor:pointer;margin-top:6px;transition:border-color .1s;}
-.sub-opt:hover{background:#f5f5f5;}
-.sub-opt.chk{border-color:var(--black);background:#f5f5f5;}
-.chkbox{width:13px;height:13px;border:2px solid var(--mid);border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .1s;font-size:9px;color:transparent;}
-.sub-opt.chk .chkbox{border-color:var(--black);background:var(--black);color:var(--white);}
-.sub-lbl{font-size:12px;color:var(--dark);}
-.sub-opt.chk .sub-lbl{color:var(--black);}
+.empty{text-align:center;padding:40px 20px;color:var(--dark);font-size:13px;border:1px dashed var(--mid);border-radius:var(--r);}
 
-.divider{height:1px;background:var(--mid);margin:22px 0;}
-.out-lbl{font-size:10px;font-weight:700;color:var(--dark);letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px;}
-.btn-row{display:flex;gap:7px;flex-wrap:wrap;}
-.a-btn{padding:6px 14px;border-radius:var(--r);border:1px solid var(--mid);font-size:13px;font-family:'Noto Sans JP',sans-serif;cursor:pointer;font-weight:500;transition:all .1s;display:flex;align-items:center;gap:5px;background:var(--white);color:var(--dark);}
-.a-btn:hover{background:#f5f5f5;border-color:var(--dark);color:var(--black);}
-.a-btn.primary{background:var(--black);color:var(--white);border-color:var(--black);}
-.a-btn.primary:hover{background:#333;}
-.a-btn.danger{border-color:var(--red);color:var(--red);}
-.a-btn.danger:hover{background:var(--red-bg);}
-
-.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.3);display:none;align-items:center;justify-content:center;z-index:100;}
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.28);display:none;align-items:flex-start;justify-content:center;z-index:150;padding:32px 16px;overflow-y:auto;}
 .modal-ov.open{display:flex;}
-.modal{background:var(--white);border:1px solid var(--mid);border-radius:6px;width:660px;max-width:95vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.14);}
-.modal-hd{padding:14px 18px;border-bottom:1px solid var(--mid);display:flex;justify-content:space-between;align-items:center;}
-.modal-ttl{font-size:15px;font-weight:700;}
-.modal-cls{background:none;border:none;color:var(--dark);font-size:18px;cursor:pointer;padding:0 3px;border-radius:3px;transition:background .1s;}
-.modal-cls:hover{background:var(--mid);color:var(--black);}
-.modal-bd{padding:22px;overflow-y:auto;font-size:14px;line-height:1.9;}
-.modal-bd h2{font-size:18px;font-weight:700;text-align:center;margin-bottom:4px;}
-.doc-sub{text-align:center;font-size:12px;color:var(--dark);margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid var(--mid);}
-.doc-ch{font-size:16px;font-weight:700;margin-top:16px;margin-bottom:8px;}
-.doc-cl{margin-bottom:7px;display:flex;gap:10px;}
-.doc-cn{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dark);white-space:nowrap;padding-top:2px;}
+.modal{background:var(--white);border:1px solid var(--mid);border-radius:6px;width:700px;max-width:100%;padding:22px;display:flex;flex-direction:column;gap:14px;box-shadow:0 8px 32px rgba(0,0,0,.12);margin-bottom:32px;}
+.modal h3{font-size:15px;font-weight:700;border-bottom:1px solid var(--mid);padding-bottom:11px;}
 
-@media print{.topbar,.sidebar,.out-sec,.modal-ov{display:none!important;}.app{display:block;}.main{padding:0;max-width:none;}}
+.f-row{display:flex;flex-direction:column;gap:4px;}
+.f-row label{font-size:12px;font-weight:600;color:var(--dark);}
+.f-in,.f-sel,.f-ta{background:#f9f9f9;border:1px solid var(--mid);color:var(--black);padding:7px 10px;border-radius:var(--r);font-family:'Noto Sans JP',sans-serif;font-size:13px;width:100%;transition:.1s;}
+.f-in:focus,.f-sel:focus,.f-ta:focus{outline:none;border-color:var(--blue);background:var(--white);box-shadow:0 0 0 2px var(--blue-bg);}
+.f-ta{min-height:66px;resize:vertical;line-height:1.6;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
 
-  /* タッチ操作最適化 */
-  button,label,.tog,.p-btn,.sb-reset,.opt-item,.sub-opt,.a-btn{-webkit-tap-highlight-color:transparent;touch-action:manipulation;}
-  input[type=number],.n-inp{font-size:16px;} /* iOS ズーム防止 */
-  .a-btn{min-height:40px;padding:8px 16px;}
-  .tog{min-width:30px;}
-  .sub-opt,.opt-item{min-height:40px;}
+.dyn-sec{background:#f9f9f9;border:1px solid var(--mid);border-radius:var(--r);padding:13px;}
+.dyn-ttl{font-size:11px;font-weight:700;color:var(--dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px;display:flex;justify-content:space-between;align-items:center;}
+.dyn-add{background:none;border:1px dashed var(--mid);color:var(--dark);padding:3px 10px;border-radius:var(--r);cursor:pointer;font-size:12px;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.dyn-add:hover{border-color:var(--blue);color:var(--blue);}
+.dyn-item{background:var(--white);border:1px solid var(--mid);border-radius:var(--r);padding:11px;margin-bottom:7px;}
+.dyn-item:last-child{margin-bottom:0;}
+.dyn-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;}
+.dyn-lbl{font-size:11px;font-weight:700;color:var(--dark);text-transform:uppercase;letter-spacing:.05em;}
+.dyn-rm{background:none;border:none;color:var(--dark);cursor:pointer;font-size:14px;padding:0 3px;border-radius:3px;transition:.1s;}
+.dyn-rm:hover{background:var(--red-bg);color:var(--red);}
+.nested-sec{background:#f0f0f0;border:1px solid var(--mid);border-radius:var(--r);padding:10px;margin-top:10px;}
+.nested-ttl{font-size:10px;font-weight:700;color:var(--dark);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}
+
+.m-acts{display:flex;gap:7px;justify-content:flex-end;border-top:1px solid var(--mid);padding-top:13px;margin-top:3px;}
+.sv-btn{background:var(--blue);color:var(--white);border:none;padding:7px 18px;border-radius:var(--r);font-size:13px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.sv-btn:hover{background:#1d4ed8;}
+.cn-btn{background:none;border:1px solid var(--mid);color:var(--dark);padding:7px 14px;border-radius:var(--r);font-size:13px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:.1s;}
+.cn-btn:hover{background:#f5f5f5;}
+
+.preset-clause-row{border:1px solid var(--mid);border-radius:var(--r);padding:10px 12px;margin-bottom:5px;background:var(--white);transition:border-color .1s;}
+.preset-clause-row:hover{border-color:var(--dark);}
+.preset-clause-row.open{border-color:var(--blue);}
+.pc-hd{display:flex;align-items:center;gap:10px;margin-bottom:0;}
+.preset-clause-row.open .pc-hd{margin-bottom:10px;}
+.pc-name{font-size:13px;font-weight:500;flex:1;}
+.pc-body{display:none;padding-left:32px;border-top:1px solid var(--mid);padding-top:10px;margin-top:2px;}
+.preset-clause-row.open .pc-body{display:block;}
+.pc-expand{background:none;border:1px solid var(--mid);color:var(--dark);cursor:pointer;font-size:11px;padding:2px 8px;border-radius:3px;transition:.1s;font-family:'Noto Sans JP',sans-serif;}
+.pc-expand:hover{border-color:var(--blue);color:var(--blue);}
+
+.mini-tog{position:relative;width:28px;height:15px;flex-shrink:0;cursor:pointer;}
+.mini-tog input{opacity:0;width:0;height:0;}
+.mini-sl{position:absolute;inset:0;background:var(--mid);border-radius:15px;transition:background .15s;}
+.mini-sl::before{content:'';position:absolute;width:9px;height:9px;left:3px;top:3px;background:var(--white);border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2);}
+.mini-tog input:checked+.mini-sl{background:var(--blue);}
+.mini-tog input:checked+.mini-sl::before{transform:translateX(13px);}
+
+.guide{background:#f9f9f9;border:1px solid var(--mid);border-radius:var(--r);padding:20px 22px;font-size:13px;line-height:1.9;max-width:600px;}
+.guide h4{font-size:11px;font-weight:700;color:var(--dark);text-transform:uppercase;letter-spacing:.05em;margin:15px 0 5px;border-top:1px solid var(--mid);padding-top:12px;}
+.guide h4:first-child{border-top:none;margin-top:0;padding-top:0;}
+.guide code{background:#ebebeb;border:1px solid var(--mid);padding:1px 5px;border-radius:3px;font-family:'JetBrains Mono',monospace;font-size:12px;}
+.guide pre{background:#ebebeb;border:1px solid var(--mid);padding:10px 12px;border-radius:var(--r);font-size:11px;color:var(--dark);font-family:'JetBrains Mono',monospace;white-space:pre-wrap;margin-top:5px;line-height:1.8;}
 </style>
 </head>
 <body>
-<div id="loading"><div class="spin"></div>読み込み中…</div>
-<div id="load-error">⚠ データの読み込みに失敗しました。</div>
 
-<div class="app">
+<div id="login-screen">
+  <div class="login-card">
+    <div style="font-size:28px">🛡️</div>
+    <h2>管理者パネル</h2>
+    <p>Googleアカウントでログインしてください。管理者として登録されたアカウントのみ入室できます。</p>
+    <button class="g-btn" onclick="loginWithGoogle()"><img src="https://www.google.com/favicon.ico" alt="">Googleでログイン</button>
+  </div>
+</div>
+<div id="loading-screen" style="display:none"><div class="spin"></div><span style="font-size:13px;color:var(--dark)">認証を確認しています…</span></div>
+<div id="toast"></div>
+
+<div id="admin-screen" style="display:none">
   <header class="topbar">
     <span class="t-logo">模擬戦 Regulation</span>
     <span class="t-sep">/</span>
-    <span class="t-sub">Minecraft Military</span>
-    <div class="t-right"><a class="t-link" href="admin.html">管理者ページ →</a></div>
+    <span class="badge">ADMIN</span>
+    <div class="t-right">
+      <div class="u-info"><img id="u-av" src="" alt=""><span id="u-name"></span></div>
+      <a class="t-link" href="index.html">← ユーザー画面</a>
+      <button class="t-logout" onclick="logout()">ログアウト</button>
+    </div>
   </header>
-  <aside class="sidebar">
-    <div class="sb-lbl">プリセット</div>
-    <div id="preset-list"></div>
-    <hr class="sb-hr">
-    <button class="sb-reset" onclick="applyReset()">↺ リセット</button>
-  </aside>
-  <main class="main">
-    <div class="page-h">レギュレーション作成</div>
-    <div class="page-sub">条文を有効にして設定し、PDF または Word で出力します。</div>
-    <div id="clauses-container"></div>
-    <div class="divider"></div>
-    <div class="out-sec">
-      <div class="out-lbl">出力</div>
-      <div class="btn-row">
-        <button class="a-btn primary" onclick="openPreview()">プレビュー</button>
-        <button class="a-btn danger" onclick="printPDF()">PDF</button>
-        <button class="a-btn" onclick="downloadWord()">Word</button>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button class="tab on" onclick="switchTab('chapters',this)">章管理</button>
+      <button class="tab" onclick="switchTab('clauses',this)">条文管理</button>
+      <button class="tab" onclick="switchTab('presets',this)">プリセット管理</button>
+      <button class="tab" onclick="switchTab('guide',this)">使い方</button>
+    </div>
+
+    <!-- Chapters -->
+    <div class="tp on" id="tp-chapters">
+      <div class="s-hd">
+        <span class="s-ttl">章一覧<span class="s-hint">— ↑↓ またはドラッグで並び替え</span></span>
+        <button class="add-btn" onclick="openChModal(null)">＋ 追加</button>
+      </div>
+      <div class="ch-list" id="ch-list"></div>
+    </div>
+
+    <!-- Clauses -->
+    <div class="tp" id="tp-clauses">
+      <div class="s-hd">
+        <span class="s-ttl">条文一覧<span class="s-hint">— ↑↓ またはドラッグで並び替え</span></span>
+        <button class="add-btn" onclick="openCModal(null)">＋ 追加</button>
+      </div>
+      <div class="cl-list" id="cl-list"></div>
+    </div>
+
+    <!-- Presets -->
+    <div class="tp" id="tp-presets">
+      <div class="s-hd">
+        <span class="s-ttl">プリセット一覧</span>
+        <button class="add-btn" onclick="openPModal(null)">＋ 追加</button>
+      </div>
+      <div id="pr-list"></div>
+    </div>
+
+    <!-- Guide -->
+    <div class="tp" id="tp-guide">
+      <div class="guide">
+        <h4>テンプレート文字列</h4>
+        <p>条文テキストに <code>{{変数名}}</code> を埋め込むと入力値が挿入されます。</p>
+        <h4>TOGGLE型</h4>
+        <pre>テキスト: このルールが有効です。
+選択肢なし、ON/OFFのみの簡潔な型。</pre>
+        <h4>NUM型</h4>
+        <pre>テキスト:  金床を{{max_anvil}}段以上重ねてはいけない。
+変数名:    max_anvil</pre>
+        <h4>SELECT / COMBO型</h4>
+        <pre>選択肢A:   1ターンに一度のみ射撃できる。
+選択肢B:   {{tick_count}} game tickの間であれば複数回射撃できる。</pre>
+        <h4>サブオプション（全タイプ対応）</h4>
+        <pre>テキスト:  なお、z軸方向のみ最大{{z_max}}ブロックはみ出して良い。</pre>
+        <h4>管理者の追加</h4>
+        <p>Firebase コンソール → Firestore → <code>admins</code> コレクションにGmailアドレスをドキュメントIDとして追加し、フィールド <code>role: "admin"</code> を設定。</p>
       </div>
     </div>
-  </main>
+  </div>
 </div>
 
-<div class="modal-ov" id="modal" onclick="if(event.target===this)this.classList.remove('open')">
+<!-- Chapter Modal -->
+<div class="modal-ov" id="ch-modal" onclick="if(event.target===this)closeChModal()">
   <div class="modal">
-    <div class="modal-hd">
-      <span class="modal-ttl">プレビュー</span>
-      <button class="modal-cls" onclick="document.getElementById('modal').classList.remove('open')">✕</button>
+    <h3 id="ch-modal-ttl">章を追加</h3>
+    <input type="hidden" id="ch-id"><input type="hidden" id="ch-ord">
+    <div class="f-row"><label>章タイトル *</label><input class="f-in" id="ch-ttl" placeholder="例：基本ルール"></div>
+    <div class="m-acts">
+      <button class="cn-btn" onclick="closeChModal()">キャンセル</button>
+      <button class="sv-btn" onclick="submitCh()">保存</button>
     </div>
-    <div class="modal-bd" id="preview-content"></div>
+  </div>
+</div>
+
+<!-- Clause Modal -->
+<div class="modal-ov" id="c-modal" onclick="if(event.target===this)closeCModal()">
+  <div class="modal">
+    <h3 id="c-modal-ttl">条文を追加</h3>
+    <input type="hidden" id="c-id"><input type="hidden" id="c-ord">
+    <div class="g2">
+      <div class="f-row"><label>条文タイトル *</label><input class="f-in" id="c-ttl" placeholder="例：戦車最大サイズ"></div>
+      <div class="f-row"><label>タイプ *</label>
+        <select class="f-sel" id="c-type" onchange="onTypeChg()">
+          <option value="toggle">TOGGLE — ON/OFFのみ</option>
+          <option value="num">NUM — 数値入力のみ</option>
+          <option value="select">SELECT — 選択のみ</option>
+          <option value="combo">COMBO — 選択＋数値</option>
+        </select>
+      </div>
+    </div>
+    <div class="g2">
+      <div class="f-row"><label>章</label>
+        <select class="f-sel" id="c-chapter"><option value="">（未分類）</option></select>
+      </div>
+      <div class="f-row"><label>デフォルト状態</label>
+        <select class="f-sel" id="c-def"><option value="true">有効（ON）</option><option value="false">無効（OFF）</option></select>
+      </div>
+    </div>
+
+    <!-- TOGGLE -->
+    <div id="toggle-flds">
+      <div class="f-row"><label>テキスト（表示内容）</label><textarea class="f-ta" id="c-toggle-txt" placeholder="例：このルールが有効です。"></textarea></div>
+      <div class="dyn-sec" style="margin-top:11px">
+        <div class="dyn-ttl">サブオプション（付加条文チェックボックス） <button class="dyn-add" onclick="addTopSub()">＋ 追加</button></div>
+        <div id="toggle-sub-con"></div>
+      </div>
+    </div>
+
+    <!-- NUM fields -->
+    <div id="num-flds" style="display:none">
+      <div class="dyn-sec">
+        <div class="dyn-ttl">入力フォーム項目 <button class="dyn-add" onclick="addInp()">＋ 追加</button></div>
+        <div id="inp-con"></div>
+      </div>
+      <div class="f-row" style="margin-top:11px">
+        <label>条文テキスト</label>
+        <textarea class="f-ta" id="c-tmpl" placeholder="例：金床を{{max_anvil}}段以上重ねてはいけない。"></textarea>
+      </div>
+      <div class="dyn-sec" style="margin-top:11px">
+        <div class="dyn-ttl">サブオプション <button class="dyn-add" onclick="addTopSub()">＋ 追加</button></div>
+        <div id="top-sub-con"></div>
+      </div>
+    </div>
+
+    <!-- SELECT / COMBO fields -->
+    <div id="opt-flds" style="display:none">
+      <div class="dyn-sec">
+        <div class="dyn-ttl">選択肢 <button class="dyn-add" onclick="addOpt()">＋ 追加</button></div>
+        <div id="opt-con"></div>
+      </div>
+    </div>
+
+    <div class="m-acts">
+      <button class="cn-btn" onclick="closeCModal()">キャンセル</button>
+      <button class="sv-btn" onclick="submitC()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Preset Modal -->
+<div class="modal-ov" id="p-modal" onclick="if(event.target===this)closePModal()">
+  <div class="modal">
+    <h3 id="p-modal-ttl">プリセットを追加</h3>
+    <input type="hidden" id="p-id">
+    <div class="g2">
+      <div class="f-row"><label>プリセット名 *</label><input class="f-in" id="p-name" placeholder="例：スタンダード"></div>
+      <div class="f-row"><label>説明</label><input class="f-in" id="p-desc" placeholder="例：標準的な規定"></div>
+    </div>
+    <div class="f-row"><label>各条文の設定</label></div>
+    <div id="p-clauses"></div>
+    <div class="m-acts">
+      <button class="cn-btn" onclick="closePModal()">キャンセル</button>
+      <button class="sv-btn" onclick="submitP()">保存</button>
+    </div>
   </div>
 </div>
 
 <script>
-let state={};
-function initState(){
-  state={};
-  (window._CL||[]).forEach(c=>{
-    state[c.id]={enabled:c.defaultEnabled??true};
-    if(c.type==='toggle'){
-      // toggle type: just checked or not
-      state[c.id].checked=c.defaultEnabled??true;
-    }else if(c.type==='num'){
-      state[c.id].inputs={};
-      (c.inputs||[]).forEach(i=>{state[c.id].inputs[i.id]=i.default??0;});
-      (c.subOptions||[]).forEach(sub=>{
-        state[c.id][sub.id]={checked:sub.defaultChecked??false,inputs:{}};
-        (sub.inputs||[]).forEach(i=>{state[c.id][sub.id].inputs[i.id]=i.default??0;});
-      });
+let _tt,dragSrcId=null,dragType=null;
+function toast(msg,type='ok'){const el=document.getElementById('toast');el.textContent=msg;el.className='show '+type;clearTimeout(_tt);_tt=setTimeout(()=>{el.className='';},type==='ok'?3000:5000);}
+window.toast=toast;
+
+function switchTab(name,btn){document.querySelectorAll('.tp').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));document.getElementById('tp-'+name).classList.add('on');btn.classList.add('on');}
+
+// ── Chapters ──────────────────────────────────────────────────────────────────
+function moveChapter(id,dir){
+  const ch=window._ch;
+  const i=ch.findIndex(x=>x.id===id);
+  const j=i+dir;
+  if(j<0||j>=ch.length)return;
+  [ch[i],ch[j]]=[ch[j],ch[i]];
+  window._ch=ch;
+  renderChapters();
+  saveChapterOrder(ch.map(x=>x.id));
+}
+
+function renderChapters(){
+  const list=document.getElementById('ch-list');
+  const ch=window._ch||[];
+  if(!ch.length){list.innerHTML='<div class="empty">章がまだありません。「＋ 追加」から作成してください。</div>';return;}
+  list.innerHTML='';
+  ch.forEach((c,i)=>{
+    const isFirst=i===0,isLast=i===ch.length-1;
+    const row=document.createElement('div');
+    row.className='ch-row';row.id='chr-'+c.id;row.draggable=true;
+    row.innerHTML=`
+      <span class="dh">⠿</span>
+      <div class="ch-info"><div class="ch-name">${c.title}</div></div>
+      <div class="row-acts">
+        <button class="ord-btn" onclick="moveChapter('${c.id}',-1)" ${isFirst?'disabled':''}>↑</button>
+        <button class="ord-btn" onclick="moveChapter('${c.id}',1)" ${isLast?'disabled':''}>↓</button>
+        <button class="e-btn" onclick="openChModal('${c.id}')">編集</button>
+        <button class="d-btn" onclick="deleteChapter('${c.id}')">削除</button>
+      </div>`;
+    setupDragDrop(row,'ch',c.id);
+    list.appendChild(row);
+  });
+}
+
+// ── Clauses ───────────────────────────────────────────────────────────────────
+function moveClause(id,dir){
+  const cl=window._cl;
+  const i=cl.findIndex(x=>x.id===id);
+  const j=i+dir;
+  if(j<0||j>=cl.length)return;
+  [cl[i],cl[j]]=[cl[j],cl[i]];
+  window._cl=cl;
+  renderClauses();
+  saveOrder(cl.map(x=>x.id));
+}
+
+function renderClauses(){
+  const list=document.getElementById('cl-list');
+  const cl=window._cl||[];
+  if(!cl.length){list.innerHTML='<div class="empty">条文がまだありません。「＋ 追加」から作成してください。</div>';return;}
+  list.innerHTML='';
+  cl.forEach((c,i)=>{
+    const tc=c.type==='toggle'?'tag-t':c.type==='num'?'tag-n':c.type==='select'?'tag-s':'tag-c';
+    const tl=c.type==='toggle'?'TOGGLE':c.type==='num'?'NUM':c.type==='select'?'SELECT':'COMBO';
+    const isFirst=i===0,isLast=i===cl.length-1;
+    const row=document.createElement('div');
+    row.className='cl-row';row.id='cr-'+c.id;row.draggable=true;
+    row.innerHTML=`
+      <span class="dh">⠿</span>
+      <div class="cl-info">
+        <div class="cl-name"><span>${String(i+1).padStart(2,'0')}. ${c.title}</span><span class="tag ${tc}">${tl}</span></div>
+        <div class="cl-meta">デフォルト: ${c.defaultEnabled!==false?'有効':'無効'}</div>
+      </div>
+      <div class="row-acts">
+        <button class="ord-btn" onclick="moveClause('${c.id}',-1)" ${isFirst?'disabled':''}>↑</button>
+        <button class="ord-btn" onclick="moveClause('${c.id}',1)" ${isLast?'disabled':''}>↓</button>
+        <button class="e-btn" onclick="openCModal('${c.id}')">編集</button>
+        <button class="d-btn" onclick="deleteClause('${c.id}')">削除</button>
+      </div>`;
+    setupDragDrop(row,'cl',c.id);
+    list.appendChild(row);
+  });
+}
+
+function setupDragDrop(row,type,id){
+  row.addEventListener('dragstart',e=>{dragSrcId=id;dragType=type;row.classList.add('dragging');e.dataTransfer.effectAllowed='move';});
+  row.addEventListener('dragend',()=>{dragSrcId=null;dragType=null;row.classList.remove('dragging');document.querySelectorAll('.cl-row,.ch-row').forEach(r=>{r.classList.remove('drop-above','drop-below');});});
+  row.addEventListener('dragover',e=>{
+    e.preventDefault();if(!dragSrcId||dragType!==type)return;
+    const rect=row.getBoundingClientRect();const mid=rect.top+rect.height/2;
+    document.querySelectorAll(type==='cl'?'.cl-row':'.ch-row').forEach(r=>{r.classList.remove('drop-above','drop-below');});
+    row.classList.add(e.clientY<mid?'drop-above':'drop-below');
+  });
+  row.addEventListener('dragleave',e=>{if(!row.contains(e.relatedTarget)){row.classList.remove('drop-above','drop-below');}});
+  row.addEventListener('drop',e=>{
+    e.preventDefault();row.classList.remove('drop-above','drop-below');
+    if(!dragSrcId||dragType!==type||dragSrcId===id)return;
+    const arr=type==='cl'?window._cl:window._ch;
+    const fi=arr.findIndex(x=>x.id===dragSrcId),ti=arr.findIndex(x=>x.id===id);
+    if(fi===-1||ti===-1)return;
+    const rect=row.getBoundingClientRect();const above=e.clientY<rect.top+rect.height/2;
+    const[moved]=arr.splice(fi,1);const newTi=arr.findIndex(x=>x.id===id);
+    arr.splice(above?newTi:newTi+1,0,moved);
+    if(type==='cl'){window._cl=arr;renderClauses();saveOrder(arr.map(x=>x.id));}
+    else{window._ch=arr;renderChapters();saveChapterOrder(arr.map(x=>x.id));}
+    dragSrcId=null;dragType=null;
+  });
+}
+
+function renderPresets(){
+  const list=document.getElementById('pr-list');const pr=window._pr||[];
+  if(!pr.length){list.innerHTML='<div class="empty">プリセットがまだありません。</div>';return;}
+  list.innerHTML=pr.map(p=>`
+    <div class="pr-card">
+      <div class="pr-info"><div class="pr-name">${p.name}</div>${p.description?`<div class="pr-desc">${p.description}</div>`:''}</div>
+      <div class="row-acts"><button class="e-btn" onclick="openPModal('${p.id}')">編集</button><button class="d-btn" onclick="deletePreset('${p.id}')">削除</button></div>
+    </div>`).join('');
+}
+window.renderChapters=renderChapters;window.renderClauses=renderClauses;window.renderPresets=renderPresets;
+
+// ── Chapter Modal ─────────────────────────────────────────────────────────────
+function openChModal(id){
+  if(id){
+    const c=window._ch.find(x=>x.id===id);
+    document.getElementById('ch-modal-ttl').textContent='章を編集';
+    document.getElementById('ch-id').value=c.id;
+    document.getElementById('ch-ord').value=c.order??0;
+    document.getElementById('ch-ttl').value=c.title||'';
+  }else{
+    document.getElementById('ch-modal-ttl').textContent='章を追加';
+    document.getElementById('ch-id').value='';
+    document.getElementById('ch-ord').value=(window._ch||[]).length;
+    document.getElementById('ch-ttl').value='';
+  }
+  document.getElementById('ch-modal').classList.add('open');
+}
+function closeChModal(){document.getElementById('ch-modal').classList.remove('open');}
+async function submitCh(){
+  const ttl=document.getElementById('ch-ttl').value.trim();
+  if(!ttl){toast('章タイトルを入力してください','err');return;}
+  const d={id:document.getElementById('ch-id').value||'chapter_'+Date.now(),title:ttl,order:parseInt(document.getElementById('ch-ord').value)||0};
+  if(await saveChapter(d))closeChModal();
+}
+
+// ── Clause Modal ──────────────────────────────────────────────────────────────
+let _ic=0,_oc=0,_sc=0;
+function openCModal(id){
+  _ic=0;_oc=0;_sc=0;
+  document.getElementById('inp-con').innerHTML='';
+  document.getElementById('opt-con').innerHTML='';
+  document.getElementById('top-sub-con').innerHTML='';
+  document.getElementById('toggle-sub-con').innerHTML='';
+  document.getElementById('c-tmpl').value='';
+  document.getElementById('c-toggle-txt').value='';
+  
+  const chapters=window._ch||[];
+  const chSelect=document.getElementById('c-chapter');
+  chSelect.innerHTML='<option value="">（未分類）</option>'+chapters.map(c=>`<option value="${c.id}">${c.title}</option>`).join('');
+  
+  if(id){
+    const c=window._cl.find(x=>x.id===id);
+    document.getElementById('c-modal-ttl').textContent='条文を編集';
+    document.getElementById('c-id').value=c.id;
+    document.getElementById('c-ord').value=c.order??0;
+    document.getElementById('c-ttl').value=c.title||'';
+    document.getElementById('c-type').value=c.type||'toggle';
+    document.getElementById('c-chapter').value=c.chapterId||'';
+    document.getElementById('c-def').value=String(c.defaultEnabled!==false);
+    onTypeChg();
+    if(c.type==='toggle'){document.getElementById('c-toggle-txt').value=c.textTemplate||'';(c.subOptions||[]).forEach(s=>addToggleSub(s));}
+    else if(c.type==='num'){document.getElementById('c-tmpl').value=c.textTemplate||'';(c.inputs||[]).forEach(i=>addInp(i));(c.subOptions||[]).forEach(s=>addTopSub(s));}
+    else{(c.options||[]).forEach(o=>addOpt(o));}
+  }else{
+    document.getElementById('c-modal-ttl').textContent='条文を追加';
+    document.getElementById('c-id').value='';
+    document.getElementById('c-ord').value=(window._cl||[]).length;
+    document.getElementById('c-ttl').value='';
+    document.getElementById('c-type').value='toggle';
+    document.getElementById('c-chapter').value='';
+    document.getElementById('c-def').value='true';
+    onTypeChg();
+  }
+  document.getElementById('c-modal').classList.add('open');
+}
+function closeCModal(){document.getElementById('c-modal').classList.remove('open');}
+function onTypeChg(){const t=document.getElementById('c-type').value;document.getElementById('toggle-flds').style.display=t==='toggle'?'block':'none';document.getElementById('num-flds').style.display=t==='num'?'block':'none';document.getElementById('opt-flds').style.display=(t==='select'||t==='combo')?'block':'none';}
+
+function addInp(d={}){const i=_ic++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">項目 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>変数名</label><input class="f-in" id="ii-${i}" value="${d.id||''}" placeholder="例: length"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="il-${i}" value="${d.label||''}" placeholder="例: 全長"></div><div class="f-row"><label>デフォルト値</label><input class="f-in" type="number" id="id-${i}" value="${d.default??1}"></div><div class="f-row"><label>単位</label><input class="f-in" id="iu-${i}" value="${d.unit||''}" placeholder="例: ブロック"></div></div>`;document.getElementById('inp-con').appendChild(div);}
+
+function addTopSub(d={}){const i=_sc++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in" id="tsi-${i}" value="${d.id||''}" placeholder="例: z_overhang"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="tsl-${i}" value="${d.label||''}" placeholder="例: z軸はみ出し許容"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta" id="tst-${i}">${d.textTemplate||''}</textarea></div><div class="f-row"><label>デフォルト</label><select class="f-sel" id="tsd-${i}" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('ts-inp-${i}')">＋</button></div><div id="ts-inp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('ts-inp-'+i,j,inp)).join('')}</div></div>`;document.getElementById('top-sub-con').appendChild(div);}
+
+function addToggleSub(d={}){const i=_sc++;const div=document.createElement('div');div.className='dyn-item';div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in" id="togi-${i}" value="${d.id||''}" placeholder="例: extra_rule"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="togl-${i}" value="${d.label||''}" placeholder="例: 追加ルールを適用する"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta" id="togt-${i}">${d.textTemplate||''}</textarea></div><div class="f-row"><label>デフォルト</label><select class="f-sel" id="togd-${i}" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('tog-inp-${i}')">＋</button></div><div id="tog-inp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('tog-inp-'+i,j,inp)).join('')}</div></div>`;document.getElementById('toggle-sub-con').appendChild(div);}
+
+function collectToggleSubs(){return Array.from(document.querySelectorAll('#toggle-sub-con>.dyn-item')).map((_,i)=>({id:document.getElementById('togi-'+i)?.value.trim()||'sub'+i,label:document.getElementById('togl-'+i)?.value.trim()||'',textTemplate:document.getElementById('togt-'+i)?.value.trim()||'',defaultChecked:document.getElementById('togd-'+i)?.value==='true',inputs:collectSubInps(document.getElementById('tog-inp-'+i))})).filter((_,i)=>document.getElementById('togi-'+i));}
+
+function addOpt(d={}){const i=_oc++;const isCombo=document.getElementById('c-type').value==='combo';const div=document.createElement('div');div.className='dyn-item';const subsHtml=(d.subOptions||[]).map((s,j)=>subOptHtml('opt-sub-'+i,j,s)).join('');div.innerHTML=`<div class="dyn-hd"><span class="dyn-lbl">選択肢 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>選択肢ID</label><input class="f-in" id="oi-${i}" value="${d.id||''}" placeholder="例: with_limit"></div><div class="f-row"><label>ラベル</label><input class="f-in" id="ol-${i}" value="${d.label||''}" placeholder="例: 最大範囲を設定する"></div></div><div class="f-row"><label>条文テキスト</label><textarea class="f-ta" id="ot-${i}">${d.textTemplate||''}</textarea></div>${isCombo?`<div class="nested-sec"><div class="nested-ttl">入力フォーム項目 <button class="dyn-add" onclick="addSubInp('oinp-${i}')">＋</button></div><div id="oinp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('oinp-'+i,j,inp)).join('')}</div></div>`:''}<div class="nested-sec"><div class="nested-ttl">サブオプション <button class="dyn-add" onclick="addSubOpt('opt-sub-${i}')">＋</button></div><div id="opt-sub-${i}">${subsHtml}</div></div>`;document.getElementById('opt-con').appendChild(div);}
+
+function subInpHtml(prefix,j,d={}){return `<div class="dyn-item"><div class="dyn-hd"><span class="dyn-lbl">フォーム ${j+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>変数名</label><input class="f-in sinp-id" value="${d.id||''}" placeholder="例: z_max"></div><div class="f-row"><label>ラベル</label><input class="f-in sinp-label" value="${d.label||''}" placeholder="例: 許容量"></div><div class="f-row"><label>デフォルト値</label><input class="f-in sinp-default" type="number" value="${d.default??1}"></div><div class="f-row"><label>単位</label><input class="f-in sinp-unit" value="${d.unit||''}" placeholder="例: ブロック"></div></div></div>`;}
+
+function subOptHtml(prefix,j,d={}){const subInps=(d.inputs||[]).map((inp,k)=>subInpHtml(`${prefix}-sub-${j}-inp`,k,inp)).join('');return `<div class="dyn-item"><div class="dyn-hd"><span class="dyn-lbl">サブ ${j+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in sub-id" value="${d.id||''}" placeholder="例: z_overhang"></div><div class="f-row"><label>ラベル</label><input class="f-in sub-label" value="${d.label||''}" placeholder="例: z軸はみ出し許容"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta sub-text">${d.textTemplate||''}</textarea></div><div class="f-row" style="margin-top:4px"><label>デフォルト</label><select class="f-sel sub-def" style="max-width:120px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('${prefix}-sub-${j}-inp')">＋</button></div><div id="${prefix}-sub-${j}-inp">${subInps}</div></div></div>`;}
+
+function addSubInp(cid){const con=document.getElementById(cid);if(!con)return;const j=con.querySelectorAll(':scope>.dyn-item').length;con.insertAdjacentHTML('beforeend',subInpHtml(cid,j));}
+function addSubOpt(cid){const con=document.getElementById(cid);if(!con)return;const j=con.querySelectorAll(':scope>.dyn-item').length;con.insertAdjacentHTML('beforeend',subOptHtml(cid,j));}
+
+function collectInps(){return Array.from(document.querySelectorAll('#inp-con>.dyn-item')).map((_,i)=>({id:document.getElementById('ii-'+i)?.value.trim()||'f'+i,label:document.getElementById('il-'+i)?.value.trim()||'',default:parseFloat(document.getElementById('id-'+i)?.value)||0,unit:document.getElementById('iu-'+i)?.value.trim()||''})).filter((_,i)=>document.getElementById('ii-'+i));}
+function collectTopSubs(){return Array.from(document.querySelectorAll('#top-sub-con>.dyn-item')).map((_,i)=>({id:document.getElementById('tsi-'+i)?.value.trim()||'sub'+i,label:document.getElementById('tsl-'+i)?.value.trim()||'',textTemplate:document.getElementById('tst-'+i)?.value.trim()||'',defaultChecked:document.getElementById('tsd-'+i)?.value==='true',inputs:collectSubInps(document.getElementById('ts-inp-'+i))})).filter((_,i)=>document.getElementById('tsi-'+i));}
+function collectSubInps(con){if(!con)return[];return Array.from(con.querySelectorAll(':scope>.dyn-item')).map(item=>({id:item.querySelector('.sinp-id')?.value.trim()||'',label:item.querySelector('.sinp-label')?.value.trim()||'',default:parseFloat(item.querySelector('.sinp-default')?.value)||0,unit:item.querySelector('.sinp-unit')?.value.trim()||''})).filter(x=>x.id);}
+function collectSubOpts(con){if(!con)return[];return Array.from(con.querySelectorAll(':scope>.dyn-item')).map((item,j)=>({id:item.querySelector('.sub-id')?.value.trim()||'sub'+j,label:item.querySelector('.sub-label')?.value.trim()||'',textTemplate:item.querySelector('.sub-text')?.value.trim()||'',defaultChecked:item.querySelector('.sub-def')?.value==='true',inputs:collectSubInps(item.querySelector('[id$="-inp"]'))})).filter(x=>x.id);}
+function collectOpts(){const isC=document.getElementById('c-type').value==='combo';return Array.from(document.querySelectorAll('#opt-con>.dyn-item')).map((_,i)=>{const o={id:document.getElementById('oi-'+i)?.value.trim()||'o'+i,label:document.getElementById('ol-'+i)?.value.trim()||'',textTemplate:document.getElementById('ot-'+i)?.value.trim()||'',subOptions:collectSubOpts(document.getElementById('opt-sub-'+i))};if(isC)o.inputs=collectSubInps(document.getElementById('oinp-'+i));return o;}).filter((_,i)=>document.getElementById('oi-'+i));}
+
+async function submitC(){
+  const ttl=document.getElementById('c-ttl').value.trim();const type=document.getElementById('c-type').value;
+  if(!ttl){toast('タイトルを入力してください','err');return;}
+  const d={id:document.getElementById('c-id').value||'clause_'+Date.now(),title:ttl,type,order:parseInt(document.getElementById('c-ord').value)||0,defaultEnabled:document.getElementById('c-def').value==='true',chapterId:document.getElementById('c-chapter').value||''};
+  if(type==='toggle'){d.textTemplate=document.getElementById('c-toggle-txt').value.trim();d.subOptions=collectToggleSubs();}
+  else if(type==='num'){d.inputs=collectInps();d.textTemplate=document.getElementById('c-tmpl').value.trim();d.subOptions=collectTopSubs();}
+  else{d.options=collectOpts();}
+  if(await saveClause(d))closeCModal();
+}
+
+// ── Preset Modal ──────────────────────────────────────────────────────────────
+let _presetCfg={};
+function openPModal(id){
+  _presetCfg={};
+  if(id){const p=window._pr.find(x=>x.id===id);document.getElementById('p-modal-ttl').textContent='プリセットを編集';document.getElementById('p-id').value=p.id;document.getElementById('p-name').value=p.name||'';document.getElementById('p-desc').value=p.description||'';_presetCfg=JSON.parse(JSON.stringify(p.config||{}));}
+  else{document.getElementById('p-modal-ttl').textContent='プリセットを追加';document.getElementById('p-id').value='';document.getElementById('p-name').value='';document.getElementById('p-desc').value='';}
+  renderPresetClauses();document.getElementById('p-modal').classList.add('open');
+}
+function closePModal(){document.getElementById('p-modal').classList.remove('open');}
+
+function renderPresetClauses(){
+  const con=document.getElementById('p-clauses');const cl=window._cl||[];con.innerHTML='';
+  cl.forEach(c=>{
+    const cfg=_presetCfg[c.id]||{};const enabled=cfg.enabled??true;
+    const row=document.createElement('div');row.className='preset-clause-row';row.id='pcr-'+c.id;
+    let bodyHtml='';
+    if(c.type==='toggle'){bodyHtml=`<div style="padding:5px 0">${c.textTemplate||''}</div>`;}
+    else if(c.type==='num'){
+      bodyHtml=(c.inputs||[]).map(inp=>{const v=cfg.inputs?.[inp.id]??inp.default;return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--mid)"><span style="font-size:12px;color:var(--dark);min-width:80px">${inp.label}</span><input class="f-in" type="number" style="width:80px;padding:3px 7px;font-size:13px" value="${v}" onchange="setPCfgInp('${c.id}','${inp.id}',this.value)"><span style="font-size:11px;color:var(--dark)">${inp.unit||''}</span></div>`;}).join('');
     }else{
-      state[c.id].selectedOption=(c.options||[])[0]?.id??null;
-      (c.options||[]).forEach(opt=>{
-        if(opt.inputs){state[c.id][opt.id]={};opt.inputs.forEach(i=>{state[c.id][opt.id][i.id]=i.default??0;});}
-        (opt.subOptions||[]).forEach(sub=>{
-          state[c.id][sub.id]={checked:sub.defaultChecked??false,inputs:{}};
-          (sub.inputs||[]).forEach(i=>{state[c.id][sub.id].inputs[i.id]=i.default??0;});
-        });
-      });
+      bodyHtml=(c.options||[]).map(opt=>{const sel=(cfg.selectedOption===opt.id)||(!cfg.selectedOption&&c.options[0]?.id===opt.id);let h=`<div style="display:flex;align-items:center;gap:8px;padding:5px 0"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="radio" name="popt-${c.id}" value="${opt.id}" ${sel?'checked':''} onchange="setPCfgOpt('${c.id}','${opt.id}')">${opt.label}</label></div>`;if(c.type==='combo'&&opt.inputs?.length&&sel){h+=(opt.inputs||[]).map(inp=>{const v=cfg[opt.id]?.[inp.id]??inp.default;return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 20px"><span style="font-size:12px;color:var(--dark);min-width:80px">${inp.label}</span><input class="f-in" type="number" style="width:80px;padding:3px 7px;font-size:13px" value="${v}" onchange="setPCfgOptInp('${c.id}','${opt.id}','${inp.id}',this.value)"><span style="font-size:11px;color:var(--dark)">${inp.unit||''}</span></div>`;}).join('');}return h;}).join('');
     }
+    const allSubs=(c.type==='toggle'||c.type==='num')?(c.subOptions||[]):(c.options||[]).flatMap(o=>o.subOptions||[]);
+    if(allSubs.length){
+      bodyHtml+=`<div style="margin-top:8px;font-size:11px;font-weight:700;color:var(--dark);text-transform:uppercase;letter-spacing:.05em;padding-top:6px;border-top:1px solid var(--mid)">サブオプション</div>`;
+      allSubs.forEach(sub=>{const chk=cfg[sub.id]?.checked??sub.defaultChecked??false;bodyHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:4px 0"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px"><input type="checkbox" ${chk?'checked':''} onchange="setPCfgSub('${c.id}','${sub.id}',this.checked)">${sub.label}</label></div>`;if(sub.inputs?.length){sub.inputs.forEach(si=>{const v=cfg[sub.id]?.inputs?.[si.id]??si.default;bodyHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 22px"><span style="font-size:12px;color:var(--dark);min-width:80px">${si.label}</span><input class="f-in" type="number" style="width:80px;padding:3px 7px;font-size:13px" value="${v}" onchange="setPCfgSubInp('${c.id}','${sub.id}','${si.id}',this.value)"><span style="font-size:11px;color:var(--dark)">${si.unit||''}</span></div>`;});}});
+    }
+    row.innerHTML=`
+      <div class="pc-hd">
+        <label class="mini-tog"><input type="checkbox" ${enabled?'checked':''} onchange="setPCfgEnabled('${c.id}',this.checked)"><span class="mini-sl"></span></label>
+        <span class="pc-name">${c.title}</span>
+        <button class="pc-expand" onclick="togglePCRow('${c.id}')">詳細 ▾</button>
+      </div>
+      <div class="pc-body">${bodyHtml}</div>`;
+    con.appendChild(row);
   });
 }
 
-function renderSidebar(){
-  const list=document.getElementById('preset-list');list.innerHTML='';
-  (window._PR||[]).forEach(p=>{
-    const btn=document.createElement('button');btn.className='p-btn';btn.id='pb-'+p.id;
-    btn.innerHTML=p.name+(p.description?`<span class="pd">${p.description}</span>`:'');
-    btn.onclick=()=>applyPreset(p);list.appendChild(btn);
-  });
-}
+function togglePCRow(cid){const row=document.getElementById('pcr-'+cid);row.classList.toggle('open');row.querySelector('.pc-expand').textContent=row.classList.contains('open')?'詳細 ▴':'詳細 ▾';}
+function setPCfgEnabled(cid,val){_presetCfg[cid]=_presetCfg[cid]||{};_presetCfg[cid].enabled=val;}
+function setPCfgOpt(cid,oid){_presetCfg[cid]=_presetCfg[cid]||{};_presetCfg[cid].selectedOption=oid;renderPresetClauses();}
+function setPCfgInp(cid,iid,val){_presetCfg[cid]=_presetCfg[cid]||{};_presetCfg[cid].inputs=_presetCfg[cid].inputs||{};_presetCfg[cid].inputs[iid]=parseFloat(val)||0;}
+function setPCfgOptInp(cid,oid,iid,val){_presetCfg[cid]=_presetCfg[cid]||{};_presetCfg[cid][oid]=_presetCfg[cid][oid]||{};_presetCfg[cid][oid][iid]=parseFloat(val)||0;}
+function setPCfgSub(cid,sid,val){_presetCfg[cid]=_presetCfg[cid]||{};_presetCfg[cid][sid]=_presetCfg[cid][sid]||{inputs:{}};_presetCfg[cid][sid].checked=val;}
+function setPCfgSubInp(cid,sid,iid,val){_presetCfg[cid]=_presetCfg[cid]||{};_presetCfg[cid][sid]=_presetCfg[cid][sid]||{inputs:{}};_presetCfg[cid][sid].inputs=_presetCfg[cid][sid].inputs||{};_presetCfg[cid][sid].inputs[iid]=parseFloat(val)||0;}
 
-function applyPreset(p){
-  (window._CL||[]).forEach(c=>{
-    const ps=p.config?.[c.id];if(!ps)return;
-    if(ps.enabled!==undefined)state[c.id].enabled=ps.enabled;
-    if(c.type==='toggle'&&ps.checked!==undefined)state[c.id].checked=ps.checked;
-    if(ps.selectedOption)state[c.id].selectedOption=ps.selectedOption;
-    if(ps.inputs)Object.assign(state[c.id].inputs||{},ps.inputs);
-    const allSubs=[...(c.subOptions||[]),...(c.options||[]).flatMap(o=>o.subOptions||[])];
-    allSubs.forEach(sub=>{
-      if(ps[sub.id]){
-        state[c.id][sub.id]=state[c.id][sub.id]||{checked:false,inputs:{}};
-        if(ps[sub.id].checked!==undefined)state[c.id][sub.id].checked=ps[sub.id].checked;
-        if(ps[sub.id].inputs)Object.assign(state[c.id][sub.id].inputs,ps[sub.id].inputs);
-      }
-    });
-    (c.options||[]).forEach(opt=>{
-      if(ps[opt.id]){state[c.id][opt.id]=state[c.id][opt.id]||{};Object.assign(state[c.id][opt.id],ps[opt.id]);}
-    });
-  });
-  document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('pb-'+p.id)?.classList.add('active');
-  renderAll();
-}
-function applyReset(){initState();document.querySelectorAll('.p-btn').forEach(b=>b.classList.remove('active'));renderAll();}
-
-function renderAll(){
-  const con=document.getElementById('clauses-container');con.innerHTML='';
-  const ch=window._CH||[];const cl=window._CL||[];
-  ch.forEach(chap=>{
-    const chDiv=document.createElement('div');chDiv.className='ch-section';
-    chDiv.innerHTML='<div class="ch-title">'+chap.title+'</div>';
-    const chapClauses=cl.filter(c=>c.chapterId===chap.id);
-    let clauseNum=0;
-    chapClauses.forEach(c=>{
-      const s=state[c.id];
-      if(!s)return;
-      const isToggle=c.type==='toggle';
-      if(!isToggle)clauseNum++;
-      const card=document.createElement('div');
-      card.className='c-card '+(s.enabled?'on':'off');
-      card.id='card-'+c.id;
-      const numHtml=isToggle?'':'<span class="c-num">'+String(clauseNum).padStart(2,'0')+'</span>';
-      card.innerHTML=
-        '<div class="c-hd">'+
-          '<label class="tog"><input type="checkbox" '+(s.enabled?'checked':'')+' onchange="setEnabled(''+c.id+'',this.checked)"><span class="tog-sl"></span></label>'+
-          numHtml+
-          '<span class="c-ttl">'+c.title+'</span>'+
-        '</div>'+
-        '<div class="c-body'+(s.enabled?'':' hide')+'" id="body-'+c.id+'">'+renderBody(c)+'</div>';
-      chDiv.appendChild(card);
-    });
-    con.appendChild(chDiv);
-  });
-}
-
-function renderBody(c){
-  const s=state[c.id];
-  if(c.type==='toggle'){
-    let h=c.textTemplate
-      ? `<div style="padding:0 0 8px 0;font-size:13px;color:var(--dark)">${c.textTemplate}</div>`
-      : '';
-    if(c.subOptions?.length){
-      h+=`<div class="sub-group">${renderSubOpts(c,c.subOptions)}</div>`;
-    }
-    return h;
-  }
-  if(c.type==='num'){
-    let h=`<div class="num-group">${(c.inputs||[]).map(inp=>`
-      <div class="num-row">
-        <span class="n-lbl">${inp.label}</span>
-        <input class="n-inp" type="number" min="1" value="${s.inputs?.[inp.id]??inp.default}" oninput="setNum('${c.id}',null,'${inp.id}',this.value)">
-        ${inp.unit?`<span class="n-unit">${inp.unit}</span>`:''}
-      </div>`).join('')}</div>`;
-    if(c.subOptions?.length){
-      h+=`<div class="sub-group">${renderSubOpts(c,c.subOptions,'num')}</div>`;
-    }
-    return h;
-  }
-  const opts=Array.isArray(c.options)?c.options:Object.values(c.options||{});
-  if(!opts.length) return `<div style="padding:8px;font-size:13px;color:var(--dark);font-style:italic">（選択肢が未設定です）</div>`;
-  return `<div class="opt-group">${opts.map(opt=>renderOpt(c,opt)).join('')}</div>`;
-}
-
-function renderSubOpts(c,subs){
-  return subs.map(sub=>{
-    const ss=state[c.id][sub.id]||{checked:false,inputs:{}};
-    let h=`<div class="sub-opt${ss.checked?' chk':''}" onclick="togSub('${c.id}','${sub.id}',event)">
-      <span class="chkbox">✓</span><span class="sub-lbl">${sub.label}</span></div>`;
-    if(ss.checked&&sub.inputs?.length){
-      h+=`<div class="o-inputs"><div class="num-group">${sub.inputs.map(si=>`
-        <div class="num-row">
-          <span class="n-lbl">${si.label}</span>
-          <input class="n-inp" type="number" min="1" value="${ss.inputs?.[si.id]??si.default}"
-            oninput="setSubNum('${c.id}','${sub.id}','${si.id}',this.value)" onclick="event.stopPropagation()">
-          ${si.unit?`<span class="n-unit">${si.unit}</span>`:''}
-        </div>`).join('')}</div></div>`;
-    }
-    return h;
-  }).join('');
-}
-
-function renderOpt(c,opt){
-  const s=state[c.id];const sel=s.selectedOption===opt.id;
-  const dispLabel=opt.label||opt.text||opt.name||opt.id||'（選択肢）';
-  let h=`<div class="opt-item${sel?' sel':''}" onclick="selOpt('${c.id}','${opt.id}')">
-    <span class="rdot"></span><div style="flex:1"><span class="o-txt">${dispLabel}</span>`;
-  if(opt.inputs?.length&&sel){
-    h+=`<div class="o-inputs"><div class="num-group">${opt.inputs.map(inp=>`
-      <div class="num-row">
-        <span class="n-lbl">${inp.label}</span>
-        <input class="n-inp" type="number" min="1" value="${(s[opt.id]||{})[inp.id]??inp.default}"
-          oninput="setNum('${c.id}','${opt.id}','${inp.id}',this.value)" onclick="event.stopPropagation()">
-        ${inp.unit?`<span class="n-unit">${inp.unit}</span>`:''}
-      </div>`).join('')}</div></div>`;
-  }
-  if(opt.subOptions?.length&&sel){
-    h+=renderSubOpts(c,opt.subOptions);
-  }
-  h+=`</div></div>`;return h;
-}
-
-function setEnabled(id,val){
-  state[id].enabled=val;
-  document.getElementById('card-'+id).className='c-card '+(val?'on':'off');
-  document.getElementById('body-'+id).className='c-body'+(val?'':' hide');
-}
-function selOpt(cid,oid){state[cid].selectedOption=oid;document.getElementById('body-'+cid).innerHTML=renderBody(window._CL.find(x=>x.id===cid));}
-function setNum(cid,oid,iid,val){const v=parseFloat(val)||0;if(oid){state[cid][oid]=state[cid][oid]||{};state[cid][oid][iid]=v;}else{state[cid].inputs[iid]=v;}}
-function togSub(cid,sid,e){e.stopPropagation();state[cid][sid]=state[cid][sid]||{checked:false,inputs:{}};state[cid][sid].checked=!state[cid][sid].checked;document.getElementById('body-'+cid).innerHTML=renderBody(window._CL.find(x=>x.id===cid));}
-function setSubNum(cid,sid,iid,val){state[cid][sid].inputs[iid]=parseFloat(val)||0;}
-
-function ipl(tmpl,vals){if(!tmpl)return'';return tmpl.replace(/\{\{(\w+)\}\}/g,(_,k)=>vals?.[k]??'?');}
-function buildText(c){
-  const s=state[c.id];if(!s.enabled)return null;
-  try{
-    if(c.type==='toggle'){
-      let t=ipl(c.textTemplate,{});
-      (c.subOptions||[]).forEach(sub=>{const ss=s[sub.id];if(ss?.checked)t+=' '+ipl(sub.textTemplate,ss.inputs||{});});
-      return t;
-    }
-    if(c.type==='num'){
-      let t=ipl(c.textTemplate,s.inputs);
-      (c.subOptions||[]).forEach(sub=>{const ss=s[sub.id];if(ss?.checked)t+=ipl(sub.textTemplate,ss.inputs||{});});
-      return t;
-    }
-    const opt=(c.options||[]).find(o=>o.id===s.selectedOption);if(!opt)return null;
-    let t=ipl(opt.textTemplate,s[opt.id]||{});
-    (opt.subOptions||[]).forEach(sub=>{const ss=s[sub.id];if(ss?.checked)t+=ipl(sub.textTemplate,ss.inputs||{});});
-    return t;
-  }catch{return'（テキスト生成エラー）';}
-}
-function genAll(){const lines=[];const ch=window._CH||[];const cl=window._CL||[];ch.forEach(chap=>{let n=1;const chapCl=cl.filter(c=>c.chapterId===chap.id);chapCl.forEach(c=>{const t=buildText(c);if(t){lines.push({chapter:chap.title,num:n,text:t});n++;}});});return lines;}
-
-function openPreview(){
-  const lines=genAll();const now=new Date().toLocaleDateString('ja-JP');
-  let h=`<h2>模擬戦 レギュレーション</h2><div class="doc-sub">作成日: ${now}　／　Minecraft Military</div>`;
-  let curCh='';
-  lines.forEach(l=>{
-    if(l.chapter!==curCh){h+=`<div class="doc-ch">${l.chapter}</div>`;curCh=l.chapter;}
-    h+=`<div class="doc-cl"><span class="doc-cn">第${l.num}条</span>${l.text}</div>`;
-  });
-  if(!lines.length)h+='<p style="color:var(--dark);text-align:center;padding:24px">有効な条文がありません。</p>';
-  document.getElementById('preview-content').innerHTML=h;
-  document.getElementById('modal').classList.add('open');
-}
-function printPDF(){openPreview();setTimeout(()=>window.print(),400);}
-
-async function downloadWord(){
-  const{Document,Paragraph,TextRun,HeadingLevel,AlignmentType,Packer}=docx;
-  const lines=genAll();const now=new Date().toLocaleDateString('ja-JP');
-  const children=[
-    new Paragraph({text:'模擬戦 レギュレーション',heading:HeadingLevel.HEADING_1,alignment:AlignmentType.CENTER}),
-    new Paragraph({children:[new TextRun({text:`作成日: ${now}　／　Minecraft Military`,size:20,color:'888888'})],alignment:AlignmentType.CENTER}),
-    new Paragraph({text:''})
-  ];
-  let curCh='';
-  lines.forEach(l=>{
-    if(l.chapter!==curCh){
-      children.push(new Paragraph({text:l.chapter,heading:HeadingLevel.HEADING_2,spacing:{before:200,after:100}}));
-      curCh=l.chapter;
-    }
-    children.push(new Paragraph({children:[new TextRun({text:`第${l.num}条　`,bold:true,size:24}),new TextRun({text:l.text,size:24})],spacing:{after:160}}));
-  });
-  const doc=new Document({sections:[{children}]});
-  const blob=await Packer.toBlob(doc);
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='模擬戦_レギュレーション.docx';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+async function submitP(){
+  const name=document.getElementById('p-name').value.trim();if(!name){toast('プリセット名を入力してください','err');return;}
+  await savePreset({id:document.getElementById('p-id').value||'preset_'+Date.now(),name,description:document.getElementById('p-desc').value.trim(),config:_presetCfg});
+  closePModal();
 }
 </script>
 </body>
