@@ -40,7 +40,9 @@
       initState();renderSidebar();renderAll();
     }catch(e){
       console.error(e);
-      document.getElementById('load-error').style.display='flex';
+      const el=document.getElementById('load-error');
+      el.style.display='flex';
+      el.innerHTML='⚠ データの読み込みに失敗しました。<br><span style="font-size:11px;color:#888;margin-top:4px">'+e.message+'</span>';
     }
     document.getElementById('loading').style.display='none';
   });
