@@ -633,51 +633,49 @@ function onTypeChg(){const t=document.getElementById('c-type').value;document.ge
 function addInp(d={}){
   const i=_ic++;
   const div=document.createElement('div');div.className='dyn-item';
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">項目 '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>変数名</label><input class="f-in inp-id" value="'+(d.id||'')+'" placeholder="例: length"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in inp-label" value="'+(d.label||'')+'" placeholder="例: 全長"></div>'+
-      '<div class="f-row"><label>デフォルト値</label><input class="f-in inp-default" type="number" value="'+(d.default??1)+'"></div>'+
-      '<div class="f-row"><label>単位</label><input class="f-in inp-unit" value="'+(d.unit||'')+'" placeholder="例: ブロック"></div>'+
-    '</div>';
+  div.innerHTML=`
+    <div class="dyn-hd"><span class="dyn-lbl">項目 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>
+    <div class="g2">
+      <div class="f-row"><label>変数名</label><input class="f-in inp-id" value="${d.id||''}" placeholder="例: length"></div>
+      <div class="f-row"><label>ラベル</label><input class="f-in inp-label" value="${d.label||''}" placeholder="例: 全長"></div>
+      <div class="f-row"><label>デフォルト値</label><input class="f-in inp-default" type="number" value="${d.default??1}"></div>
+      <div class="f-row"><label>単位</label><input class="f-in inp-unit" value="${d.unit||''}" placeholder="例: ブロック"></div>
+    </div>`;
   document.getElementById('inp-con').appendChild(div);
 }
 
 function addTopSub(d={}){
   const i=_sc++;
   const uid='ts-'+Date.now()+'-'+i;
-  const div=document.createElement('div');div.className='dyn-item';
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">サブオプション '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>ID</label><input class="f-in tsub-id" value="'+(d.id||'')+'" placeholder="例: z_overhang"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in tsub-label" value="'+(d.label||'')+'" placeholder="例: z軸はみ出し許容"></div>'+
-    '</div>'+
-    '<div class="f-row"><label>付加テキスト</label><textarea class="f-ta tsub-text">'+(d.textTemplate||'')+'</textarea></div>'+
-    '<div class="f-row"><label>デフォルト</label><select class="f-sel tsub-def" style="max-width:140px"><option value="false" '+(d.defaultChecked?'':'selected')+'>OFF</option><option value="true" '+(d.defaultChecked?'selected':'')+'>ON</option></select></div>'+
-    '<div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp(''+uid+'')">＋ 追加</button></div><div id="'+uid+'">'+(d.inputs||[]).map((inp,j)=>subInpHtml(uid,j,inp)).join('')+'</div></div>';
-  div.dataset.uid=uid;
+  const div=document.createElement('div');div.className='dyn-item';div.dataset.uid=uid;
+  div.innerHTML=`
+    <div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>
+    <div class="g2">
+      <div class="f-row"><label>ID</label><input class="f-in tsub-id" value="${d.id||''}" placeholder="例: z_overhang"></div>
+      <div class="f-row"><label>ラベル</label><input class="f-in tsub-label" value="${d.label||''}" placeholder="例: z軸はみ出し許容"></div>
+    </div>
+    <div class="f-row"><label>付加テキスト</label><textarea class="f-ta tsub-text">${d.textTemplate||''}</textarea></div>
+    <div class="f-row"><label>デフォルト</label><select class="f-sel tsub-def" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div>
+    <div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('${uid}')">＋ 追加</button></div><div id="${uid}">${(d.inputs||[]).map((inp,j)=>subInpHtml(uid,j,inp)).join('')}</div></div>`;
   document.getElementById('top-sub-con').appendChild(div);
 }
 
 function addToggleSub(d={}){
+function addToggleSub(d={}){
   const i=_tsc++;
   const uid='tg-'+Date.now()+'-'+i;
-  const div=document.createElement('div');div.className='dyn-item';
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">サブオプション '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>ID</label><input class="f-in togsub-id" value="'+(d.id||'')+'" placeholder="例: extra_rule"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in togsub-label" value="'+(d.label||'')+'" placeholder="例: 追加ルールを適用する"></div>'+
-    '</div>'+
-    '<div class="f-row"><label>付加テキスト</label><textarea class="f-ta togsub-text">'+(d.textTemplate||'')+'</textarea></div>'+
-    '<div class="f-row"><label>デフォルト</label><select class="f-sel togsub-def" style="max-width:140px"><option value="false" '+(d.defaultChecked?'':'selected')+'>OFF</option><option value="true" '+(d.defaultChecked?'selected':'')+'>ON</option></select></div>'+
-    '<div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp(''+uid+'')">＋ 追加</button></div><div id="'+uid+'">'+(d.inputs||[]).map((inp,j)=>subInpHtml(uid,j,inp)).join('')+'</div></div>';
-  div.dataset.uid=uid;
+  const div=document.createElement('div');div.className='dyn-item';div.dataset.uid=uid;
+  div.innerHTML=`
+    <div class="dyn-hd"><span class="dyn-lbl">サブオプション ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>
+    <div class="g2">
+      <div class="f-row"><label>ID</label><input class="f-in togsub-id" value="${d.id||''}" placeholder="例: extra_rule"></div>
+      <div class="f-row"><label>ラベル</label><input class="f-in togsub-label" value="${d.label||''}" placeholder="例: 追加ルールを適用する"></div>
+    </div>
+    <div class="f-row"><label>付加テキスト</label><textarea class="f-ta togsub-text">${d.textTemplate||''}</textarea></div>
+    <div class="f-row"><label>デフォルト</label><select class="f-sel togsub-def" style="max-width:140px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div>
+    <div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('${uid}')">＋ 追加</button></div><div id="${uid}">${(d.inputs||[]).map((inp,j)=>subInpHtml(uid,j,inp)).join('')}</div></div>`;
   document.getElementById('toggle-sub-con').appendChild(div);
 }
-
 function collectToggleSubs(){
   return Array.from(document.querySelectorAll('#toggle-sub-con>.dyn-item')).map((div,i)=>({
     id:div.querySelector('.togsub-id')?.value.trim()||'sub'+i,
@@ -695,18 +693,18 @@ function addOpt(d={}){
   div.className='dyn-item opt-item-row';
   div.dataset.idx=i;
   const subsHtml=(d.subOptions||[]).map((s,j)=>subOptHtml('opt-sub-'+i,j,s)).join('');
-  div.innerHTML=
-    '<div class="dyn-hd"><span class="dyn-lbl">選択肢 '+(i+1)+'</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>'+
-    '<div class="g2">'+
-      '<div class="f-row"><label>選択肢ID</label><input class="f-in opt-id" value="'+(d.id||'')+'" placeholder="例: with_limit"></div>'+
-      '<div class="f-row"><label>ラベル</label><input class="f-in opt-label" value="'+(d.label||'')+'" placeholder="例: 最大範囲を設定する"></div>'+
-    '</div>'+
-    '<div class="f-row"><label>条文テキスト</label><textarea class="f-ta opt-text">'+(d.textTemplate||'')+'</textarea></div>'+
-    (isCombo?'<div class="nested-sec"><div class="nested-ttl">入力フォーム項目 <button class="dyn-add" onclick="addSubInp('oinp-'+i+'')">＋ 追加</button></div><div id="oinp-'+i+'">'+(d.inputs||[]).map((inp,j)=>subInpHtml('oinp-'+i,j,inp)).join('')+'</div></div>':'')+
-    '<div class="nested-sec"><div class="nested-ttl">サブオプション <button class="dyn-add" onclick="addSubOpt('opt-sub-'+i+'')">＋ 追加</button></div><div id="opt-sub-'+i+'">'+subsHtml+'</div></div>';
+  const inpHtml=isCombo?`<div class="nested-sec"><div class="nested-ttl">入力フォーム項目 <button class="dyn-add" onclick="addSubInp('oinp-${i}')">＋ 追加</button></div><div id="oinp-${i}">${(d.inputs||[]).map((inp,j)=>subInpHtml('oinp-'+i,j,inp)).join('')}</div></div>`:'';
+  div.innerHTML=`
+    <div class="dyn-hd"><span class="dyn-lbl">選択肢 ${i+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div>
+    <div class="g2">
+      <div class="f-row"><label>選択肢ID</label><input class="f-in opt-id" value="${d.id||''}" placeholder="例: with_limit"></div>
+      <div class="f-row"><label>ラベル</label><input class="f-in opt-label" value="${d.label||''}" placeholder="例: 最大範囲を設定する"></div>
+    </div>
+    <div class="f-row"><label>条文テキスト</label><textarea class="f-ta opt-text">${d.textTemplate||''}</textarea></div>
+    ${inpHtml}
+    <div class="nested-sec"><div class="nested-ttl">サブオプション <button class="dyn-add" onclick="addSubOpt('opt-sub-${i}')">＋ 追加</button></div><div id="opt-sub-${i}">${subsHtml}</div></div>`;
   document.getElementById('opt-con').appendChild(div);
 }
-
 function subInpHtml(prefix,j,d={}){return `<div class="dyn-item"><div class="dyn-hd"><span class="dyn-lbl">フォーム ${j+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>変数名</label><input class="f-in sinp-id" value="${d.id||''}" placeholder="例: z_max"></div><div class="f-row"><label>ラベル</label><input class="f-in sinp-label" value="${d.label||''}" placeholder="例: 許容量"></div><div class="f-row"><label>デフォルト値</label><input class="f-in sinp-default" type="number" value="${d.default??1}"></div><div class="f-row"><label>単位</label><input class="f-in sinp-unit" value="${d.unit||''}" placeholder="例: ブロック"></div></div></div>`;}
 
 function subOptHtml(prefix,j,d={}){const subInps=(d.inputs||[]).map((inp,k)=>subInpHtml(`${prefix}-sub-${j}-inp`,k,inp)).join('');return `<div class="dyn-item"><div class="dyn-hd"><span class="dyn-lbl">サブ ${j+1}</span><button class="dyn-rm" onclick="this.closest('.dyn-item').remove()">✕</button></div><div class="g2"><div class="f-row"><label>ID</label><input class="f-in sub-id" value="${d.id||''}" placeholder="例: z_overhang"></div><div class="f-row"><label>ラベル</label><input class="f-in sub-label" value="${d.label||''}" placeholder="例: z軸はみ出し許容"></div></div><div class="f-row"><label>付加テキスト</label><textarea class="f-ta sub-text">${d.textTemplate||''}</textarea></div><div class="f-row" style="margin-top:4px"><label>デフォルト</label><select class="f-sel sub-def" style="max-width:120px"><option value="false" ${!d.defaultChecked?'selected':''}>OFF</option><option value="true" ${d.defaultChecked?'selected':''}>ON</option></select></div><div class="nested-sec"><div class="nested-ttl">追加入力フォーム <button class="dyn-add" onclick="addSubInp('${prefix}-sub-${j}-inp')">＋ 追加</button></div><div id="${prefix}-sub-${j}-inp">${subInps}</div></div></div>`;}
