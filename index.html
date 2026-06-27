@@ -286,19 +286,25 @@ function renderAll(){
   const ch=window._CH||[];const cl=window._CL||[];
   ch.forEach(chap=>{
     const chDiv=document.createElement('div');chDiv.className='ch-section';
-    chDiv.innerHTML=`<div class="ch-title">${chap.title}</div>`;
+    chDiv.innerHTML='<div class="ch-title">'+chap.title+'</div>';
     const chapClauses=cl.filter(c=>c.chapterId===chap.id);
-    chapClauses.forEach((c,idx)=>{
+    let clauseNum=0;
+    chapClauses.forEach(c=>{
       const s=state[c.id];
+      if(!s)return;
+      const isToggle=c.type==='toggle';
+      if(!isToggle)clauseNum++;
       const card=document.createElement('div');
-      card.className='c-card '+(s.enabled?'on':'off');card.id='card-'+c.id;
-      card.innerHTML=`
-        <div class="c-hd">
-          <label class="tog"><input type="checkbox" ${s.enabled?'checked':''} onchange="setEnabled('${c.id}',this.checked)"><span class="tog-sl"></span></label>
-          <span class="c-num">${String(idx+1).padStart(2,'0')}</span>
-          <span class="c-ttl">${c.title}</span>
-        </div>
-        <div class="c-body${s.enabled?'':' hide'}" id="body-${c.id}">${renderBody(c)}</div>`;
+      card.className='c-card '+(s.enabled?'on':'off');
+      card.id='card-'+c.id;
+      const numHtml=isToggle?'':'<span class="c-num">'+String(clauseNum).padStart(2,'0')+'</span>';
+      card.innerHTML=
+        '<div class="c-hd">'+
+          '<label class="tog"><input type="checkbox" '+(s.enabled?'checked':'')+' onchange="setEnabled(''+c.id+'',this.checked)"><span class="tog-sl"></span></label>'+
+          numHtml+
+          '<span class="c-ttl">'+c.title+'</span>'+
+        '</div>'+
+        '<div class="c-body'+(s.enabled?'':' hide')+'" id="body-'+c.id+'">'+renderBody(c)+'</div>';
       chDiv.appendChild(card);
     });
     con.appendChild(chDiv);
@@ -308,7 +314,9 @@ function renderAll(){
 function renderBody(c){
   const s=state[c.id];
   if(c.type==='toggle'){
-    let h=`<div style="padding:0 12px 8px 0;font-size:13px;color:var(--dark)">${c.textTemplate||''}</div>`;
+    let h=c.textTemplate
+      ? `<div style="padding:0 0 8px 0;font-size:13px;color:var(--dark)">${c.textTemplate}</div>`
+      : '';
     if(c.subOptions?.length){
       h+=`<div class="sub-group">${renderSubOpts(c,c.subOptions)}</div>`;
     }
@@ -326,7 +334,9 @@ function renderBody(c){
     }
     return h;
   }
-  return `<div class="opt-group">${(c.options||[]).map(opt=>renderOpt(c,opt)).join('')}</div>`;
+  const opts=Array.isArray(c.options)?c.options:Object.values(c.options||{});
+  if(!opts.length) return `<div style="padding:8px;font-size:13px;color:var(--dark);font-style:italic">（選択肢が未設定です）</div>`;
+  return `<div class="opt-group">${opts.map(opt=>renderOpt(c,opt)).join('')}</div>`;
 }
 
 function renderSubOpts(c,subs){
@@ -349,8 +359,9 @@ function renderSubOpts(c,subs){
 
 function renderOpt(c,opt){
   const s=state[c.id];const sel=s.selectedOption===opt.id;
+  const dispLabel=opt.label||opt.text||opt.name||opt.id||'（選択肢）';
   let h=`<div class="opt-item${sel?' sel':''}" onclick="selOpt('${c.id}','${opt.id}')">
-    <span class="rdot"></span><div style="flex:1"><span class="o-txt">${opt.label}</span>`;
+    <span class="rdot"></span><div style="flex:1"><span class="o-txt">${dispLabel}</span>`;
   if(opt.inputs?.length&&sel){
     h+=`<div class="o-inputs"><div class="num-group">${opt.inputs.map(inp=>`
       <div class="num-row">
